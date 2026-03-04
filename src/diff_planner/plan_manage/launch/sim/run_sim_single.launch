@@ -2,10 +2,10 @@
     <arg name="map_size_x" value="200.0"/>
     <arg name="map_size_y" value="200.0"/>
     <arg name="map_size_z" value=" 3.0"/>
-    <arg name="odom_topic" value="visual_slam/odom" />
+    <arg name="odom_topic" value="/mavros/local_position/odom" />
 
     <!-- map -->
-    <node pkg ="map_generator" name ="random_forest" type ="random_forest" output = "screen">
+    <!-- <node pkg ="map_generator" name ="random_forest" type ="random_forest" output = "screen">
         <param name="map/x_size" value="26" />
         <param name="map/y_size" value="20" />
         <param name="map/z_size" value="3" />
@@ -24,7 +24,7 @@
         <param name="ObstacleShape/theta" value="0.5"/>
         <param name="pub_rate" value="1.0"/>
         <param name="min_distance" value="0.8"/>
-    </node>
+    </node> -->
 
     <include file="$(find diff_planner)/launch/include/run_in_sim.xml">
         <arg name="drone_id" value="0"/>
@@ -40,4 +40,3 @@
     <include file="$(find multipoint)/launch/multipointplan_sim.launch" />
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find diff_planner)/launch/include/sim.rviz" required="true" />
 </launch>
-

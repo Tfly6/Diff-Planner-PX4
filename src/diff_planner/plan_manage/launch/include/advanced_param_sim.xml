@@ -33,10 +33,15 @@
     <arg name="flight_type"/>
     <arg name="use_multitopology_trajs"/>
     <arg name="drone_id"/>
+    <arg name="use_drone_topic_prefix" default="true"/>
+    <arg name="resolved_odometry_topic" default="$(eval '/drone_%s_%s' % (arg('drone_id'), arg('odometry_topic').lstrip('/')) if arg('use_drone_topic_prefix') == 'true' else arg('odometry_topic'))"/>
+    <arg name="resolved_cloud_topic" default="$(eval '/drone_%s_%s' % (arg('drone_id'), arg('cloud_topic').lstrip('/')) if arg('use_drone_topic_prefix') == 'true' else arg('cloud_topic'))"/>
+    <arg name="resolved_camera_pose_topic" default="$(eval '/drone_%s_%s' % (arg('drone_id'), arg('camera_pose_topic').lstrip('/')) if arg('use_drone_topic_prefix') == 'true' else arg('camera_pose_topic'))"/>
+    <arg name="resolved_depth_topic" default="$(eval '/drone_%s_%s' % (arg('drone_id'), arg('depth_topic').lstrip('/')) if arg('use_drone_topic_prefix') == 'true' else arg('depth_topic'))"/>
     <!-- main node -->
     <!-- <node pkg="diff_planner" name="diff_planner_node" type="diff_planner_node" output="screen" launch-prefix="valgrind"> -->
     <node pkg="diff_planner" name="drone_$(arg drone_id)_diff_planner_node" type="diff_planner_node" output="screen">
-        <remap from="~odom_world" to="/drone_$(arg drone_id)_$(arg odometry_topic)"/>
+        <remap from="~odom_world" to="$(arg resolved_odometry_topic)"/>
         <remap from="~mandatory_stop" to="/mandatory_stop_to_planner"/>
         <remap from="~planning/trajectory" to = "/drone_$(arg drone_id)_planning/trajectory"/>
         <remap from="~planning/data_display" to = "/drone_$(arg drone_id)_planning/data_display"/>
@@ -44,10 +49,10 @@
         <remap from="~planning/broadcast_traj_recv" to = "/broadcast_traj_to_planner"/>
         <remap from="~planning/heartbeat" to = "/drone_$(arg drone_id)_traj_server/heartbeat"/>
         <!-- <remap from="/goal" to = "/goal_with_id"/> -->
-        <remap from="~grid_map/odom" to="/drone_$(arg drone_id)_$(arg odometry_topic)"/>
-        <remap from="~grid_map/cloud" to="/drone_$(arg drone_id)_$(arg cloud_topic)"/>
-        <remap from="~grid_map/pose"   to = "/drone_$(arg drone_id)_$(arg camera_pose_topic)"/>
-        <remap from="~grid_map/depth" to = "/drone_$(arg drone_id)_$(arg depth_topic)"/>
+        <remap from="~grid_map/odom" to="$(arg resolved_odometry_topic)"/>
+        <remap from="~grid_map/cloud" to="$(arg resolved_cloud_topic)"/>
+        <remap from="~grid_map/pose"   to = "$(arg resolved_camera_pose_topic)"/>
+        <remap from="~grid_map/depth" to = "$(arg resolved_depth_topic)"/>
         <!-- planning fsm -->
         <param name="fsm/flight_type" value="$(arg flight_type)" type="int"/>
         <param name="fsm/thresh_replan_time" value="1.0" type="double"/>

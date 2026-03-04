@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   traj_utils
   traj_opt # for traj2odom_node
   sensor_msgs
+  quadrotor_msgs
 )
 
 catkin_package(

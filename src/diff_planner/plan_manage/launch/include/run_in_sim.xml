@@ -26,6 +26,12 @@
     <arg name="target4_z" default="0.0"/>
     <!-- topic of your odometry such as VIO or LIO -->
     <arg name="odom_topic"/>
+    <arg name="camera_pose_topic" default="/camera/pose"/>
+    <arg name="depth_topic" default="/camera/depth/image_raw"/>
+    <arg name="cloud_topic" default="pcl_render_node/cloud"/>
+    <arg name="use_drone_topic_prefix" default="true"/>
+    <arg name="cmd_topic" default="drone_$(arg drone_id)_planning/pos_cmd"/>
+    <arg name="enable_manual_take_over" default="true"/>
     <!-- main algorithm params -->
     <include file="$(find diff_planner)/launch/include/advanced_param_sim.xml">
         <arg name="drone_id" value="$(arg drone_id)"/>
@@ -33,19 +39,20 @@
         <arg name="map_size_y_" value="$(arg map_size_y)"/>
         <arg name="map_size_z_" value="$(arg map_size_z)"/>
         <arg name="odometry_topic" value="$(arg odom_topic)"/>
+        <arg name="use_drone_topic_prefix" value="$(arg use_drone_topic_prefix)"/>
         <!-- camera pose: transform of camera frame in the world frame -->
         <!-- depth topic: depth image, 640x480 by default -->
         <!-- don't set cloud_topic if you already set these ones! -->
-        <arg name="camera_pose_topic" value="pcl_render_node/camera_pose"/>
-        <arg name="depth_topic" value="pcl_render_node/depth"/>
+        <arg name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+        <arg name="depth_topic" value="$(arg depth_topic)"/>
         <!-- topic of point cloud measurement, such as from LIDAR  -->
         <!-- don't set camera pose and depth, if you already set this one! -->
-        <arg name="cloud_topic" value="pcl_render_node/cloud"/>
+        <arg name="cloud_topic" value="$(arg cloud_topic)"/>
         <!-- intrinsic params of the depth camera -->
-        <arg name="cx" value="321.04638671875"/>
-        <arg name="cy" value="243.44969177246094"/>
-        <arg name="fx" value="387.229248046875"/>
-        <arg name="fy" value="387.229248046875"/>
+        <arg name="cx" value="320"/>
+        <arg name="cy" value="240"/>
+        <arg name="fx" value="319.9348449707031"/>
+        <arg name="fy" value="319.9348449707031"/>
         <!-- maximum velocity, acceleration and jerk the drone will reach -->
         <arg name="max_vel" value="1.5" />
         <arg name="max_acc" value="6.0" />
@@ -77,7 +84,7 @@
     </include>
     <!-- trajectory server -->
     <node pkg="diff_planner" name="drone_$(arg drone_id)_traj_server" type="traj_server" output="screen">
-        <remap from="position_cmd" to="drone_$(arg drone_id)_planning/pos_cmd"/>
+        <remap from="position_cmd" to="$(arg cmd_topic)"/>
         <remap from="~planning/trajectory" to="drone_$(arg drone_id)_planning/trajectory"/>
         <param name="traj_server/time_forward" value="1.0" type="double"/>
     </node>
@@ -85,7 +92,7 @@
     <node pkg="diff_planner" name="drone_$(arg drone_id)_monitor_node" type="monitor_node" output="screen">
     </node> -->
     <!-- use simulator -->
-    <include file="$(find diff_planner)/launch/include/simulator.xml">
+    <!-- <include file="$(find diff_planner)/launch/include/simulator.xml">
         <arg name="drone_id" value="$(arg drone_id)"/>
         <arg name="map_size_x_" value="$(arg map_size_x)"/>
         <arg name="map_size_y_" value="$(arg map_size_y)"/>
@@ -94,10 +101,21 @@
         <arg name="init_y_" value="$(arg init_y)"/>
         <arg name="init_z_" value="$(arg init_z)"/>
         <arg name="odometry_topic" value="$(arg odom_topic)" />
-    </include>
-    <include file="$(find manual_take_over)/launch/take_over_drone.launch">
+    </include> -->
+     <node pkg="odom_visualization" name="drone_$(arg drone_id)_odom_visualization" type="odom_visualization" output="screen">
+        <remap from="~odom" to="$(arg odom_topic)"/>
+        <param name="color/a" value="1.0"/>
+        <param name="color/r" value="0.0"/>
+        <param name="color/g" value="0.0"/>
+        <param name="color/b" value="0.0"/>
+        <param name="covariance_scale" value="100.0"/>
+        <param name="robot_scale" value="0.35"/>
+        <param name="tf45" value="false"/>
+        <param name="drone_id" value="$(arg drone_id)"/>
+    </node>
+    <include file="$(find manual_take_over)/launch/take_over_drone.launch" if="$(arg enable_manual_take_over)">
         <arg name="drone_id" value="$(arg drone_id)"/>
-        <arg name="cmd_topic" value="drone_$(arg drone_id)_planning/pos_cmd"/>
+        <arg name="cmd_topic" value="$(arg cmd_topic)"/>
     </include>
 </launch>
     
