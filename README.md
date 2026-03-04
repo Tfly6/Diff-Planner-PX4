@@ -1,117 +1,232 @@
-<img src="images/nus_logo.png" alt="nus logo" align="right" height="80" />
+# Diff-Planner-PX4
 
-# Diff-Planner
+将**微分智飞**公司开源的 **[Diff-Planner](https://github.com/DifferentialRobotics/Diff-Planner)** （由 [03563ad](https://github.com/DifferentialRobotics/Diff-Planner/commit/03563adae7315cf3db35494bfac9903093ef5663) commit修改而来）适配了PX4 SITL Gazebo 仿真环境
 
-## 概述
-**Diff-Planner** 是为**微分智飞**公司旗下教育无人机子品牌**非凸空间**适配的单机导航避障算法。其基于开源算法 **[EGO-Planner-v2](https://github.com/ZJU-FAST-Lab/EGO-Planner-v2)** ，并由原班人马深度参与算法优化。在继承 **EGO-Planner** 优秀框架的基础上，针对教育无人机平台的特殊需求进行了全面适配和增强，旨在提供更稳定、更可靠的科研体验。
+- `diff_planner/`
+  核心导航避障算法本体。包含环境建图、路径搜索、轨迹优化、任务状态机、轨迹发布与多机桥接等主流程模块（如 `plan_env`、`path_searching`、`traj_opt`、`plan_manage`、`swarm_bridge`）。**Diff-Planner** 是为**微分智飞**公司旗下教育无人机子品牌**非凸空间**适配的单机导航避障算法。其基于开源算法 **[EGO-Planner-v2](https://github.com/ZJU-FAST-Lab/EGO-Planner-v2)** ，并由原班人马深度参与算法优化。在继承 **EGO-Planner** 优秀框架的基础上，针对教育无人机平台的特殊需求进行了全面适配和增强，旨在提供更稳定、更可靠的科研体验。
+- `se3_controller/`
+  飞行控制器侧（SE(3) 控制）。负责把期望轨迹/姿态转换成可执行的控制量（姿态、角速度、推力），主要用于 PX4/MAVROS 场景下的轨迹跟踪与控制。参考了[HITSZ-MAS/se3_controller](https://github.com/HITSZ-MAS/se3_controller) 项目。
+- `user_command/`
+  用户命令层。用于把“人给的任务”变成规划器可用的目标序列，比如多点航点任务、返航点触发、预设任务流等（当前主要是 `multipoint`，此仿真中默认不用）。
+- `Utils/`
+  通用功能包集合。放与主算法解耦但运行必需/常用的辅助组件，比如可视化（`odom_visualization`、`rviz_plugins`）、消息定义（`quadrotor_msgs`）、工具函数（`uav_utils`）、人工接管/移动障碍等。
 
-<p align="center">
-  <img src="images/navigation.gif" alt="nav" width="600" />
-</p>
+>支持 Ubuntu 18.04 ROS Melodic、Ubuntu 20.04 ROS Noetic
 
-## 算法优化
-- **Diff-Planner** 在 **[EGO-Planner-v2](https://github.com/ZJU-FAST-Lab/EGO-Planner-v2)** 基础上做了多处优化，包括：
->+ **修复**局部规划时 A* 终点在障碍物里，尝试沿 A* 起始方向推出障碍物时的bug。
+## 1. 准备
 
->+ **修复**优化过程中频繁打印局部目标点在障碍物里（"Local target in collision, skip this planning."），规划器卡死的bug。
+- **使用之前必须搭建** [PX4无人机仿真环境](https://blog.csdn.net/weixin_55944949/article/details/130895608?spm=1001.2014.3001.5501)
+- **创建工作空间** 没有创建工作空间，可以执行下列代码，如果创建了可以跳过
 
->+ **修复**在状态机中使用 **planNextWaypoint()** 导致状态机卡死的bug。
+```bash
+sudo apt-get install python-catkin-tools python-rosinstall-generator -y
 
->+ **新增**规划优化异常检测， 避免动力学不可行的轨迹发出，新增了动力学容忍值（[advanced_param_exp.xml](src/diff_planner/plan_manage/launch/include/advanced_param_exp.xml)中设置）：\
-\<param name="optimization/vel_tolerance" value="1.0" type="double"/>  \
-\<param name="optimization/acc_tolerance" value="1.0" type="double"/>
-
->+ **修复**遇到大障碍物后，无人机在大障碍物面前反复徘徊卡死的bug，同时增加是否使用大障碍物检测的开关（[advanced_param_exp.xml](src/diff_planner/plan_manage/launch/include/advanced_param_exp.xml)中设置）：\
->\<param name="fsm/enable_stuck_detect" value="true"/> 
-
->+ **新增**优化失败次数过多的处理。
-
->+ **新增**激光雷达建图 **raycast** 版本，使激光雷达建图更加稳定。
-
->+ **新增**用户接口 **user_command** 功能包，使用户能以多种方式设置途径点以及设置返程点。
-
->+ **traj_server** 节点**新增**yaw角控制接口，用户可根据需要在规划过程中控制无人机yaw角。
-
-- **本项目会长期维护并根据用户反馈持续优化。**
-
-## 运行环境
-本项目基于ROS1开发，请根据所使用ubuntu版本安装对应版本ROS1，支持ubuntu16.04, 18.04和20.04。
-
-
-## 仿真运行步骤
-
-### 1. 下载源码并编译:
-```
-git clone https://github.com/DifferentialRobotics/Diff-Planner.git
-cd Diff-Planner
-catkin_make
+# For Ros Noetic use that:
+# sudo apt install python3-catkin-tools python3-rosinstall-generator python3-osrf-pycommon -y
 ```
 
-### 2. 单机rviz手动指点飞行：
+```bash
+mkdir -p ~/catkin_ws/src
+cd ~/catkin_ws && catkin init # 初始化工作空间
+catkin build
 ```
-cd Diff-Planner
-source devel/setup.zsh # 如果使用bash终端，则执行: source devel/setup.bash
-roslaunch diff_planner run_sim_single.launch
+
+- **依赖**
+
+```bash
+sudo apt install libgoogle-glog-dev libgflags-dev libeigen3-dev libarmadillo-dev
+sudo apt install ros-$ROS_DISTRO-pcl-ros ros-$ROS_DISTRO-tf2-geometry-msgs ros-$ROS_DISTRO-laser-geometry ros-$ROS_DISTRO-tf2-sensor-msgs
 ```
+
+## 2. 编译
+
+```bash
+cd ~/catkin_ws/src
+git clone https://github.com/Tfly6/Diff-Planner-PX4.git
+cd ~/catkin_ws
+catkin build
+```
+
+## 3. 运行
+
+- 配置仿真（可选）：如果没有可用的带深度相机的无人机，可以参考
+
+```bash
+# model
+# PX4 v1.14之前
+cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/depth_camera_new ${YOUR_PX4_PATH}/Tools/sitl_gazebo/models/
+cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/iris_depth_camera_new ${YOUR_PX4_PATH}/Tools/sitl_gazebo/models/
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/outdoor_village.world ${YOUR_PX4_PATH}/Tools/sitl_gazebo/worlds/
+
+# PX4 v1.14 之后
+cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/depth_camera_new ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/
+cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/iris_depth_camera_new ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/outdoor_village.world ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/
+```
+
+```bash
+# launch
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/outdoor_depth_camera.launch ${YOUR_PX4_PATH}/launch/
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/px4_config.yaml ${YOUR_PX4_PATH}/launch/
+```
+
+- 终端一：启动gazebo仿真
+
+```bash
+roslaunch px4 outdoor_depth_camera.launch # 用自己的也行
+```
+
+- 终端二：启动 se3_controller
+
+```bash
+cd ~/catkin_ws
+source ./devel/setup.bash
+roslaunch se3_controller sitl_se3_controller.launch
+```
+
+- 终端三：启动 diff_planner
+
+```bash
+cd ~/catkin_ws
+source ./devel/setup.bash
+roslaunch diff_planner run_px4_sitl_gazebo.launch
+```
+
 使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置，之后松开鼠标即发送目标点，无人机开始规划。
-<p align="center">
-  <img src="images/rviz_test.gif" alt="rviz_tes" width="600" />
-</p>
 
+## 4. 主要订阅和发布的话题
 
-### 3. 单机预设点飞行：
-在 **[points.yaml](src/user_command/multipoint/config/points.yaml)** 文件中 **test1** 下设置期望途经点，**test_back** 下设置返程目标点，之后通过以下指令执行任务：
-```
-cd Diff-Planner
-source devel/setup.zsh
-roslaunch diff_planner run_sim_single.launch
-cd Diff-Planner #新建终端
-./sh_files/pub_trigger.sh #开始执行任务 或在rviz中用2D Nav Goal插件在地图任意位置点击也能开始执行任务
-./sh_files/back.sh #开始返程规划
-```
-注：通过修改 **[multipointplan_sim.launch](src/user_command/multipoint/launch/multipointplan_sim.launch)** 中的 **fligt_type** 可实现多种指点规划方式，如自定义到达每个途经点过程中的飞机yaw角，控制到达每个途经点后的停留时间等，详见 **[points.yaml](src/user_command/multipoint/config/points.yaml)** 顶部注释。
+**diff_planner**
 
-### 4. 集群预设点飞行：
-在 **[run_sim_swarm.launch](src/diff_planner/plan_manage/launch/sim/run_sim_swarm.launch)** 中设置每架无人机的目标点 **target0_x/y/z**，之后通过以下指令执行任务：
-```
-cd Diff-Planner
-source devel/setup.zsh
-roslaunch diff_planner run_sim_swarm.launch
-cd Diff-Planner #新建终端
-./sh_files/pub_swarm_trigger.sh #开始执行任务
-```
-<p align="center">
-  <img src="images/swarm.gif" alt="swarm" width="600" />
-</p>
+- **输入话题（主链路）**
 
+  - /goal
 
-## 实机运行教程
-### 0.深度相机内参替换
-若要使用**视觉定位**下规划，需要先在 **[run_exp_single_vio.launch](src/diff_planner/plan_manage/launch/exp/run_exp_single_vio.launch)** 中替换深度相机内参 **cx/cy/fx/fy**，内参查看方式：
-```
-cd Diff-Planner
-./sh_files/run_vins.sh
-rostopic echo /camera/depth/camera_info
-```
-消息中的K矩阵即为深度相机内参，注意矩阵中的顺序为 **fx/cx/fy/cy**。
+    - 作用：给规划器发送目标点（rviz中的**3D Nav Goal**或者user_command中输出的）。
 
-### 1. 雷达定位下规划：
-```
-cd Diff-Planner
-./sh_files/run_single_lio.sh #请先按照配套的产品手册教程配置途径点位
-```
-### 2. 视觉定位下规划：
-```
-cd Diff-Planner
-./sh_files/run_single_vio.sh #请先按照配套的产品手册教程配置途径点位
-```
+  - /traj_start_trigger
+    
 
-起飞、规划、返航、降落方式详见与实机配套的**产品手册**。
+    - 作用：触发按预设 waypoint 开始任务（flight_type=2 常见）。
 
-## 致谢与声明
-本项目在开发过程中参考并使用了 **[EGO-Planner-v2](https://github.com/ZJU-FAST-Lab/EGO-Planner-v2)**，特此感谢浙江大学 **FAST-Lab** 团队的开源贡献。
+  - /mandatory_stop_to_planner
+    
 
-相关代码均严格遵循原项目的开源许可协议使用，用户在使用本项目时，请务必遵守相应的许可证条款。
+    - 作用：外部急停信号，强制规划器停。
 
-# Q&A
-请随时提交问题或讨论，我们会在看到问题后尽快回复。
+  - /drone\_<id>_<odometry_topic> 或直接odom_topic（由use_drone_topic_prefix决定）
+  
+    - 作用：无人机当前里程计，规划状态机和地图更新都依赖它。
+
+  - /drone\_<id>\_<depth_topic>、/drone\_<id>\_<camera_pose_topic>、/drone\_<id>_<cloud_topic>（或无前缀）
+      - 作用：环境感知输入（深度图/相机位姿/点云），用于构建占据地图。
+
+- **输出话题（主链路）**
+
+  - /drone\_<id>_planning/trajectory
+    - 作用：优化后的轨迹（给 `traj_server` 使用）。
+    
+- /drone\_<id>_planning/data_display
+    - 作用：规划调试可视化数据。
+  
+  - /broadcast_traj_from_planner
+    - 作用：本机轨迹广播给桥接层（多机避碰/协同）。
+    
+- /drone\_<id>_traj_server/heartbeat
+    - 作用：轨迹服务心跳，监控节点可据此检测异常。
+  
+  - cmd_topic（默认/drone\_<id>_planning/pos_cmd）
+    - 作用：`traj_server` 输出的位置指令（PositionCommand），供控制器消费。
+    
+- /command/trajectory（脚本trajectory_msg_converter.py输出）
+    - 作用：把 PositionCommand 转成 MultiDOF 轨迹，便于 `se3_controller` 订阅。
+
+- **可选/辅助（你现在也在用）**
+
+  - grid_map/occupancy、grid_map/occupancy_inflate
+    - 作用：占据栅格可视化。
+    
+  - /broadcast_traj_to_planner（来自桥接）
+    - 作用：接收其他无人机轨迹用于动态避让。
+    
+  - /others_odom（桥接/检测链路）
+    - 作用：其他无人机里程计聚合输入（例如 `drone_detect`）。
+
+------
+
+**se3_controller**
+
+- **输入话题**
+
+  - /mavros/local_position/odom
+    - 作用：当前位姿/速度反馈。
+  - /mavros/imu/data
+    - 作用：角速度和加速度反馈。
+  - /mavros/state
+    - 作用：飞控连接、模式、解锁状态（FSM 切换依赖）。
+  - /command/trajectory
+    - 作用：期望轨迹输入（来自 `diff_planner` 转换脚本）。
+- **输出话题**
+
+  - /mavros/setpoint_raw/attitude
+    - 作用：姿态+角速度+推力控制指令（核心控制输出）。
+    
+  - /mavros/setpoint_position/local
+    - 作用：等待/起飞阶段的位置 setpoint。
+    
+  - /desire_odom_pub
+    - 作用：发布当前控制器内部期望状态，便于调试可视化。
+- **服务接口（不是话题，但实际在流程里很关键）**
+
+  - /mavros/set_mode、/mavros/cmd/arming
+    - 作用：切 OFFBOARD / 解锁。
+    
+  - /land
+    - 作用：外部触发降落流程。
+
+------
+
+**user_command（multipoint）**
+
+- **输入话题**
+
+  - odom_topic（launch remap，仿真默认/visual_slam/odom，你可改为/mavros/local_position/odom）
+    - 作用：用于判断“是否到达当前航点、是否切下一个点”。
+    
+  - /move_base_simple/goal
+  
+    - 作用：手动启动任务或给起始目标。
+  
+  - /back_trigger
+    - 作用：触发返航任务。
+    
+  - /mavros/rc/in
+    - 作用：遥控器通道触发起飞/降落逻辑。
+  
+- **输出话题**
+
+  - /goal
+
+    - 作用：发送给 `diff_planner` 的目标点（主入口之一）。
+
+  - /planning/yaw
+    
+    - 作用：单独发送 yaw 参考给轨迹执行侧。
+
+  - /px4ctrl/takeoff_land
+    
+    - 作用：向控制层发送起飞/降落命令。
+  
+  - /move_base_simple/goal、/back_trigger
+
+    （自身也会发布）
+
+    - 作用：用于任务触发链路（自触发/转发场景）。
+
+## 参考
+
+[Tfly6/OpenDrone: PX4 and ROS1 SITL](https://github.com/Tfly6/OpenDrone)
+
+[DifferentialRobotics/Diff-Planner](https://github.com/DifferentialRobotics/Diff-Planner)
+
+[HITSZ-MAS/se3_controller](https://github.com/HITSZ-MAS/se3_controller) 
