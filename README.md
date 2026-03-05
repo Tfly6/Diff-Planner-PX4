@@ -47,7 +47,9 @@ cd ~/catkin_ws
 catkin build
 ```
 
-## 3. 运行
+## 3. 运行（单机）
+
+### 实例一：深度相机
 
 - 配置仿真（可选）：如果没有可用的带深度相机的无人机，可以参考
 
@@ -94,6 +96,53 @@ roslaunch diff_planner run_px4_sitl_gazebo.launch
 
 使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置，之后松开鼠标即发送目标点，无人机开始规划。
 
+### 实例二：3D激光雷达（Mid360）
+
+- 根据下面仓库配置Mid360仿真 👇
+
+[Tfly6/Mid360_px4_sim_plugin: Plugin for the simulation of the Livox Mid-360 in Gazebo](https://github.com/Tfly6/Mid360_px4_sim_plugin)
+
+- 复制必要文件
+
+```bash
+# model
+# PX4 v1.14之前
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/ego_swarm.world ${YOUR_PX4_PATH}/Tools/sitl_gazebo/worlds/
+
+# PX4 v1.14 之后
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/ego_swarm.world ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/
+```
+
+```bash
+# launch
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/outdoor_mid360.launch ${YOUR_PX4_PATH}/launch/
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/px4_config.yaml ${YOUR_PX4_PATH}/launch/
+```
+
+- 终端一：启动gazebo仿真
+
+```bash
+roslaunch px4 outdoor_mid360.launch # 用自己的也行
+```
+
+- 终端二：启动 se3_controller
+
+```bash
+cd ~/catkin_ws
+source ./devel/setup.bash
+roslaunch se3_controller sitl_se3_controller.launch
+```
+
+- 终端三：启动 diff-planner
+
+```bash
+cd ~/catkin_ws
+source ./devel/setup.bash
+roslaunch opendrone run_px4_sitl_gazebo_mid360.launch
+```
+
+使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置，之后松开鼠标即发送目标点，无人机开始规划。
+
 ## 4. 主要订阅和发布的话题
 
 **diff_planner**
@@ -125,19 +174,19 @@ roslaunch diff_planner run_px4_sitl_gazebo.launch
 
   - /drone\_<id>_planning/trajectory
     - 作用：优化后的轨迹（给 `traj_server` 使用）。
-    
+  
 - /drone\_<id>_planning/data_display
     - 作用：规划调试可视化数据。
-  
+    
   - /broadcast_traj_from_planner
     - 作用：本机轨迹广播给桥接层（多机避碰/协同）。
-    
+  
 - /drone\_<id>_traj_server/heartbeat
     - 作用：轨迹服务心跳，监控节点可据此检测异常。
-  
+    
   - cmd_topic（默认/drone\_<id>_planning/pos_cmd）
     - 作用：`traj_server` 输出的位置指令（PositionCommand），供控制器消费。
-    
+  
 - /command/trajectory（脚本trajectory_msg_converter.py输出）
     - 作用：把 PositionCommand 转成 MultiDOF 轨迹，便于 `se3_controller` 订阅。
 
@@ -230,3 +279,5 @@ roslaunch diff_planner run_px4_sitl_gazebo.launch
 [DifferentialRobotics/Diff-Planner](https://github.com/DifferentialRobotics/Diff-Planner)
 
 [HITSZ-MAS/se3_controller](https://github.com/HITSZ-MAS/se3_controller) 
+
+[Tfly6/Mid360_px4_sim_plugin: Plugin for the simulation of the Livox Mid-360 in Gazebo](https://github.com/Tfly6/Mid360_px4_sim_plugin)

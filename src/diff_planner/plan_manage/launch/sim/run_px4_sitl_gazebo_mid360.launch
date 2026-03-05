@@ -1,0 +1,66 @@
+<launch>
+    <arg name="map_size_x" value="200.0"/>
+    <arg name="map_size_y" value="200.0"/>
+    <arg name="map_size_z" value="3.0"/>
+
+    <!-- PX4 SITL + MAVROS odometry topic -->
+    <arg name="odom_topic" value="/mavros/local_position/odom"/>
+
+    <!-- Planner command output topic (consumed by trajectory_msg_converter.py) -->
+    <arg name="cmd_topic" value="/drone_0_planning/pos_cmd"/>
+
+    <arg name="enable_multipoint" default="false"/>
+    <arg name="enable_manual_take_over" default="false"/>
+
+    <node pkg="tf" type="static_transform_publisher" name="world_map_linker" args="0 0 0 0 0 0 world map 100" />
+    <node pkg="tf" type="static_transform_publisher" name="tf_lidar" args="0.07 0 0.072 0 0.3925 0 base_link livox_link 50"/>
+
+    <node pkg="diff_planner" name="pointcloud_to_world" type="pointcloud_to_world.py" output="screen">
+        <param name="source_topic" value="/livox/lidar" />
+        <param name="output_topic" value="/livox/lidar_world" />
+        <param name="source_frame" value="livox_link" />
+        <param name="target_frame" value="world" />
+        <param name="lookup_timeout" value="0.1" />
+        <param name="use_latest_on_extrapolation" value="false" />
+        <param name="cloud_timeout" value="1.0" />
+        <param name="log_interval" value="2.0" />
+        <!-- filter -->
+        <param name="filter_enable" value="false" />
+        <param name="voxel_leaf_size" value="0.1" />
+        <param name="min_range" value="0.1" />
+        <param name="max_range" value="50.0" />
+        <param name="min_z" value="-20.0" />
+        <param name="max_z" value="20.0" />
+        <param name="max_points" value="80000" />
+    </node>
+
+    <include file="$(find diff_planner)/launch/include/run_in_sim.xml">
+        <arg name="drone_id" value="0"/>
+        <arg name="init_x" value="-15.0"/>
+        <arg name="init_y" value="0.0"/>
+        <arg name="init_z" value="1.0"/>
+        <arg name="map_size_x" value="$(arg map_size_x)"/>
+        <arg name="map_size_y" value="$(arg map_size_y)"/>
+        <arg name="map_size_z" value="$(arg map_size_z)"/>
+        <arg name="odom_topic" value="$(arg odom_topic)"/>
+        <!-- <arg name="camera_pose_topic" value="$(arg camera_pose_topic)"/> -->
+        <!-- <arg name="depth_topic" value="$(arg depth_topic)"/> -->
+        <arg name="pose_type" value="-1"/>
+        <arg name="cloud_topic" value="/livox/lidar_world"/>
+        <arg name="use_drone_topic_prefix" value="false"/>
+        <arg name="cmd_topic" value="$(arg cmd_topic)"/>
+        <arg name="enable_manual_take_over" value="$(arg enable_manual_take_over)"/>
+        <arg name="flight_type" value="1"/>
+    </include>
+
+    <include file="$(find multipoint)/launch/multipointplan_sim.launch" if="$(arg enable_multipoint)">
+        <arg name="odom_topic" value="$(arg odom_topic)"/>
+    </include>
+
+     <node pkg="diff_planner" name="traj_msg_converter" type="trajectory_msg_converter.py" output="screen">
+          <param name="traj_topic" value="$(arg cmd_topic)"/>
+        <param name="traj_pub_topic" value="/command/trajectory"/>
+    </node>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find diff_planner)/launch/include/sim.rviz" required="true" />
+</launch>

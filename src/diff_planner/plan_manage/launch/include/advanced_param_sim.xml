@@ -31,6 +31,7 @@
     <arg name="point4_y"/>
     <arg name="point4_z"/>
     <arg name="flight_type"/>
+    <arg name="pose_type"/>
     <arg name="use_multitopology_trajs"/>
     <arg name="drone_id"/>
     <arg name="use_drone_topic_prefix" default="true"/>
@@ -118,7 +119,7 @@
         <param name="grid_map/max_ray_length" value="4.5"/>
         <param name="grid_map/visualization_truncate_height" value="1.9"/>
         <param name="grid_map/show_occ_time" value="false"/>
-        <param name="grid_map/pose_type" value="1"/>
+        <param name="grid_map/pose_type" value="$(arg pose_type)"/>
         <param name="grid_map/frame_id" value="world"/>
         <!-- planner manager -->
         <param name="manager/max_vel" value="$(arg max_vel)" type="double"/>

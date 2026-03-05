@@ -7,6 +7,7 @@
     <arg name="init_x"/>
     <arg name="init_y"/>
     <arg name="init_z"/>
+    <arg name="pose_type" default="1"/>
     <arg name="flight_type" default="2"/>
     <arg name="point_num" default="1"/>
     <arg name="target0_x" default="0.0"/>
@@ -43,6 +44,7 @@
         <!-- camera pose: transform of camera frame in the world frame -->
         <!-- depth topic: depth image, 640x480 by default -->
         <!-- don't set cloud_topic if you already set these ones! -->
+        <arg name="pose_type" value="$(arg pose_type)"/>
         <arg name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
         <arg name="depth_topic" value="$(arg depth_topic)"/>
         <!-- topic of point cloud measurement, such as from LIDAR  -->
