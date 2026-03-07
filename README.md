@@ -49,28 +49,30 @@ catkin build
 
 ## 3. 运行（单机）
 
-### 实例一：深度相机
-
-- 配置仿真（可选）：如果没有可用的带深度相机的无人机，可以参考
+- 配置仿真
 
 ```bash
 # model
-# PX4 v1.14之前
-cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/depth_camera_new ${YOUR_PX4_PATH}/Tools/sitl_gazebo/models/
-cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/iris_depth_camera_new ${YOUR_PX4_PATH}/Tools/sitl_gazebo/models/
-cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/outdoor_village.world ${YOUR_PX4_PATH}/Tools/sitl_gazebo/worlds/
+# PX4 < v1.14
+cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/* ${YOUR_PX4_PATH}/Tools/sitl_gazebo/models/
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/* ${YOUR_PX4_PATH}/Tools/sitl_gazebo/worlds/
 
-# PX4 v1.14 之后
-cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/depth_camera_new ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/
-cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/iris_depth_camera_new ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/
-cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/outdoor_village.world ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/
+# PX4 >= v1.14
+cp -r ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/models/* ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models/
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/* ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/
 ```
 
 ```bash
 # launch
 cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/outdoor_depth_camera.launch ${YOUR_PX4_PATH}/launch/
+cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/outdoor_mid360.launch ${YOUR_PX4_PATH}/launch/
 cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/px4_config.yaml ${YOUR_PX4_PATH}/launch/
+
 ```
+
+
+
+### 实例一：深度相机
 
 - 终端一：启动gazebo仿真
 
@@ -78,7 +80,7 @@ cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/px4_config.yaml ${YOUR_PX4_PATH}
 roslaunch px4 outdoor_depth_camera.launch # 用自己的也行
 ```
 
-- 终端二：启动 se3_controller
+- 终端二：启动 se3_controller (启动之后，默认会自动进入offboard模式，解锁，然后起飞 2m)
 
 ```bash
 cd ~/catkin_ws
@@ -94,7 +96,7 @@ source ./devel/setup.bash
 roslaunch diff_planner run_px4_sitl_gazebo.launch
 ```
 
-使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置，之后松开鼠标即发送目标点，无人机开始规划。
+使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置（z轴最好大于 1m），之后松开鼠标即发送目标点，无人机开始规划。
 
 ### 实例二：3D激光雷达（Mid360）
 
@@ -102,30 +104,13 @@ roslaunch diff_planner run_px4_sitl_gazebo.launch
 
 [Tfly6/Mid360_px4_sim_plugin: Plugin for the simulation of the Livox Mid-360 in Gazebo](https://github.com/Tfly6/Mid360_px4_sim_plugin)
 
-- 复制必要文件
-
-```bash
-# model
-# PX4 v1.14之前
-cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/ego_swarm.world ${YOUR_PX4_PATH}/Tools/sitl_gazebo/worlds/
-
-# PX4 v1.14 之后
-cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/worlds/ego_swarm.world ${YOUR_PX4_PATH}/Tools/simulation/gazebo-classic/sitl_gazebo-classic/worlds/
-```
-
-```bash
-# launch
-cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/outdoor_mid360.launch ${YOUR_PX4_PATH}/launch/
-cp ~/catkin_ws/src/Diff-Planner-PX4/sitl_config/px4_config.yaml ${YOUR_PX4_PATH}/launch/
-```
-
 - 终端一：启动gazebo仿真
 
 ```bash
 roslaunch px4 outdoor_mid360.launch # 用自己的也行
 ```
 
-- 终端二：启动 se3_controller
+- 终端二：启动 se3_controller (启动之后，默认会自动进入offboard模式，解锁，然后起飞 2m)
 
 ```bash
 cd ~/catkin_ws
@@ -141,7 +126,9 @@ source ./devel/setup.bash
 roslaunch opendrone run_px4_sitl_gazebo_mid360.launch
 ```
 
-使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置，之后松开鼠标即发送目标点，无人机开始规划。
+使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置（z轴最好大于 1m），之后松开鼠标即发送目标点，无人机开始规划。
+
+[Diff-Planner(ego-plannerV2 升级版)+PX4+激光雷达/深度相机 Gazebo 仿真_bilibili](https://www.bilibili.com/video/BV1MRPxzjEPS/?spm_id_from=333.1387.homepage.video_card.click&vd_source=d59e7d5891b69289e548bcfb7a4948a0)
 
 ## 4. 主要订阅和发布的话题
 
