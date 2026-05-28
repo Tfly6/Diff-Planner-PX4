@@ -123,7 +123,7 @@ roslaunch se3_controller sitl_se3_controller.launch
 ```bash
 cd ~/catkin_ws
 source ./devel/setup.bash
-roslaunch opendrone run_px4_sitl_gazebo_mid360.launch
+roslaunch diff_planner run_px4_sitl_gazebo_mid360.launch
 ```
 
 使用rviz中的**3D Nav Goal**插件，在地图上按住左键选择目标点x-y平面位置，按住左键不松手同时按住右键上下拖动调整目标点z轴位置（z轴最好大于 1m），之后松开鼠标即发送目标点，无人机开始规划。
