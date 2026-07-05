@@ -108,11 +108,15 @@ make px4_sitl gz_x500_depth
 MicroXRCEAgent udp4 -p 8888
 ```
 
-**终端三**：启动 ROS2 workspace
+**终端三**：启动 ROS2 controller
 
 ```bash
+cd ~/ros2_ws/src
+git clone https://github.com/Tfly6/px4_se3Ctrl_ros2.git
+cd ../
+colcon build --symlink-install --packages-select se3_hopf
 source ~/ros2_ws/install/setup.bash
-ros2 launch se3_controller sitl_se3_controller.launch.py
+ros2 launch se3_hopf se3_hopf.launch.py
 ```
 
 **终端四**：启动 Diff-Planner
@@ -169,4 +173,4 @@ ros2 launch diff_planner run_px4_sitl_gazebo.launch.py
 - [EGO-Planner-v2 (ZJU-FAST-Lab)](https://github.com/ZJU-FAST-Lab/EGO-Planner-v2)
 - [px4_msgs (PX4)](https://github.com/PX4/px4_msgs)
 - [Tfly6/OpenDrone - PX4 and ROS1 SITL](https://github.com/Tfly6/OpenDrone)
-- [HITSZ-MAS/se3_controller](https://github.com/HITSZ-MAS/se3_controller)
+- [Tfly6/px4_se3Ctrl_ros2](https://github.com/Tfly6/px4_se3Ctrl_ros2)
