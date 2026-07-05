@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <uav_utils/utils.h>
+#include <nav_msgs/msg/odometry.hpp>
 
 using namespace uav_utils;
 using namespace Eigen;
@@ -80,7 +81,7 @@ TEST(GeometryUtilsFloat, Angle) {
 }
 
 TEST(ConverterDouble, Equality) {
-    nav_msgs::OdometryPtr pOdom(new nav_msgs::Odometry());
+    auto pOdom = std::make_shared<nav_msgs::msg::Odometry>();
 
     pOdom->pose.pose.position.x = 1.0;
     pOdom->pose.pose.position.y = 2.0;
@@ -102,7 +103,7 @@ TEST(ConverterDouble, Equality) {
     Eigen::Vector3d p, v, w;
     Eigen::Quaterniond q;
 
-    nav_msgs::Odometry odom_ = *pOdom;
+    nav_msgs::msg::Odometry odom_ = *pOdom;
 
     extract_odometry(pOdom, p, v, q, w);
 

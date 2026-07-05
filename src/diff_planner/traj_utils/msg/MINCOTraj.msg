@@ -1,6 +1,6 @@
 int16 drone_id
 int32 traj_id
-time start_time
+builtin_interfaces/Time start_time
 float32 des_clearance
 
 uint8 order

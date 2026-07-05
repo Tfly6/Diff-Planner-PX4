@@ -2,11 +2,14 @@
 #define _DYN_A_STAR_H_
 
 #include <iostream>
-#include <ros/ros.h>
-#include <ros/console.h>
+#include <rclcpp/rclcpp.hpp>
 #include <Eigen/Eigen>
 #include <plan_env/grid_map.h>
 #include <queue>
+
+#define PATH_SEARCHING_LOGGER rclcpp::get_logger("path_searching")
+#define ROS_ERROR(...) RCLCPP_ERROR(PATH_SEARCHING_LOGGER, __VA_ARGS__)
+#define ROS_WARN(...) RCLCPP_WARN(PATH_SEARCHING_LOGGER, __VA_ARGS__)
 
 constexpr double inf = 1 >> 20;
 struct GridNode;

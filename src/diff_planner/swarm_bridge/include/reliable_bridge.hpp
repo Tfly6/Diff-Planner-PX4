@@ -28,20 +28,27 @@
 #include "zmqpp/zmqpp.hpp"
 #include "deque"
 #include "map"
-#include "ros/ros.h"
+#include "rclcpp/rclcpp.hpp"
+#include "rclcpp/serialization.hpp"
 #include "thread"
 #include "atomic"
 #include "mutex"
 #include "condition_variable"
-#include <boost/shared_array.hpp>
+#include <memory>
 
 using namespace std;
-namespace ser = ros::serialization;
+
+// ROS2-compatible serialized message (replaces ros::SerializedMessage)
+struct RawSerializedMessage {
+    std::shared_ptr<uint8_t[]> buf;
+    size_t num_bytes;
+    size_t message_start_offset = 4; // match ros1 behavior
+};
 
 /**
- * @brief overload operator<< for add SerializedMessage to zmqpp::message
+ * @brief overload operator<< for add RawSerializedMessage to zmqpp::message
  */
-zmqpp::message &operator<<(zmqpp::message &in, ros::SerializedMessage const &msg)
+zmqpp::message &operator<<(zmqpp::message &in, RawSerializedMessage const &msg)
 {
     in.add_raw(reinterpret_cast<void const *>(msg.buf.get()), msg.num_bytes);
     return in;
@@ -53,11 +60,11 @@ class ReliableBridge
 #define OUTPUT_MSG 2
 
 #if (OUTPUT_MSG == 1)
-#define print_info(...) ROS_INFO(__VA_ARGS__)
+#define print_info(...) RCLCPP_INFO(rclcpp::get_logger("reliable_bridge"), __VA_ARGS__)
 #define print_warning(...)
 #elif (OUTPUT_MSG == 2)
-#define print_info(...) ROS_INFO(__VA_ARGS__)
-#define print_warning(...) ROS_ERROR(__VA_ARGS__)
+#define print_info(...) RCLCPP_INFO(rclcpp::get_logger("reliable_bridge"), __VA_ARGS__)
+#define print_warning(...) RCLCPP_ERROR(rclcpp::get_logger("reliable_bridge"), __VA_ARGS__)
 #else
 #define print_info(...)
 #define print_warning(...)
@@ -121,7 +128,7 @@ private:
                 recv_array >> topic_name >> data_len;
 
                 // unpack ros messages
-                ros::SerializedMessage msg_ser;
+                RawSerializedMessage msg_ser;
                 msg_ser.buf.reset(new uint8_t[data_len]);
                 memcpy(msg_ser.buf.get(), static_cast<const uint8_t *>(recv_array.raw_data(recv_array.read_cursor())), data_len);
                 recv_array.next(); //move read_cursor for next part.
@@ -185,7 +192,7 @@ public:
     vector<unique_ptr<zmqpp::socket>> receivers; //index receivers
 
     //data queue
-    vector<unique_ptr<std::deque<pair<string, ros::SerializedMessage>>>> send_data;
+    vector<unique_ptr<std::deque<pair<string, RawSerializedMessage>>>> send_data;
 
     //mutiple threads
     vector<unique_ptr<mutex>> sender_mutex;
@@ -194,7 +201,7 @@ public:
     vector<std::thread> recv_threads;
 
     //callback table   index->topic_name-> callback
-    vector<unique_ptr<map<string, function<void(int, ros::SerializedMessage &)>>>> callback_list;
+    vector<unique_ptr<map<string, function<void(int, RawSerializedMessage &)>>>> callback_list;
 
     map<int, int> id_remap; // remap id to index
     vector<int> id_list;    //save all the ID
@@ -286,9 +293,9 @@ public:
             receiver->connect(url); //connect to others
             receivers.emplace_back(std::move(receiver));
 
-            callback_list.emplace_back(new map<string, function<void(int, ros::SerializedMessage &)>>());
+            callback_list.emplace_back(new map<string, function<void(int, RawSerializedMessage &)>>());
 
-            send_data.emplace_back(new std::deque<pair<string, ros::SerializedMessage>>());
+            send_data.emplace_back(new std::deque<pair<string, RawSerializedMessage>>());
             sender_mutex.emplace_back(new mutex());      //locker
             cond.emplace_back(new condition_variable()); //Notificate the sender to send data immediately.
 
@@ -319,9 +326,9 @@ public:
      * When you want to write into global variables, it is better to use locker to protect them.
      * @param ID :receive data from specific device (MUST IN ID LIST)
      * @param topic_name :specific topic 
-     * @param callback :callback function, like `void callback_sample(int ID, ros::SerializedMessage& m)`
+     * @param callback :callback function, like `void callback_sample(int ID, RawSerializedMessage& m)`
      * @example 
-     * void callback_sample(int ID, ros::SerializedMessage& m)
+     * void callback_sample(int ID, RawSerializedMessage& m)
      *      {
      *          geometry_msgs::Point msg;
      *          ros::serialization::deserializeMessage(m,msg);
@@ -329,7 +336,7 @@ public:
      *          //msg is the ros message.
      *      }
      */
-    void register_callback(int ID, string topic_name, function<void(int, ros::SerializedMessage &)> callback)
+    void register_callback(int ID, string topic_name, function<void(int, RawSerializedMessage &)> callback)
     {   
         int ind;
         try
@@ -352,9 +359,9 @@ public:
      * Please use local variables.
      * When you want to write into global variables, it is better to use locker to protect them.
      * @param topic_name :specific topic 
-     * @param callback :callback function, like `void callback_sample(int ID, ros::SerializedMessage& m)`
+     * @param callback :callback function, like `void callback_sample(int ID, RawSerializedMessage& m)`
      * @example 
-     * void callback_sample(int ID, ros::SerializedMessage& m)
+     * void callback_sample(int ID, RawSerializedMessage& m)
      *      {
      *          geometry_msgs::Point msg;
      *          ros::serialization::deserializeMessage(m,msg);
@@ -362,7 +369,7 @@ public:
      *          //msg is the ros message.
      *      }
      */
-    void register_callback_for_all(string topic_name, function<void(int, ros::SerializedMessage &)> callback)
+    void register_callback_for_all(string topic_name, function<void(int, RawSerializedMessage &)> callback)
     {
         for (size_t i = 0; i < id_list.size(); i++)
         {
@@ -403,7 +410,16 @@ public:
         }
         {
             unique_lock<mutex> locker(*sender_mutex.at(ind));
-            buffer->emplace_back(make_pair(topic_name, ser::serializeMessage<T>(msg)));
+            // ROS2: use rclcpp::Serialization<T> instead of ros::serialization
+            rclcpp::Serialization<T> serializer;
+            rclcpp::SerializedMessage ros2_ser_msg;
+            serializer.serialize_message(&msg, &ros2_ser_msg);
+            auto& rmw_msg = ros2_ser_msg.get_rcl_serialized_message();
+            RawSerializedMessage raw_msg;
+            raw_msg.buf.reset(new uint8_t[rmw_msg.buffer_length]);
+            memcpy(raw_msg.buf.get(), rmw_msg.buffer, rmw_msg.buffer_length);
+            raw_msg.num_bytes = rmw_msg.buffer_length;
+            buffer->emplace_back(make_pair(topic_name, std::move(raw_msg)));
             locker.unlock();
             cond[ind]->notify_all();
         }

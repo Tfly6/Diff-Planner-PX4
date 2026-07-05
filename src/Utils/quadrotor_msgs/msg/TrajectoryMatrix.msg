@@ -4,7 +4,7 @@ uint8 TYPE_POLY    = 1
 uint8 TYPE_TIME    = 2
 
 #data structure
-Header    header
+std_msgs/Header    header
 uint8     type
 uint32    id
 string    name

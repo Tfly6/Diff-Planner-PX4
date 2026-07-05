@@ -1,7 +1,22 @@
 // #include <fstream>
 #include <plan_manage/planner_manager.h>
 #include <thread>
-#include "visualization_msgs/Marker.h" // zx-todo
+#include <visualization_msgs/msg/marker.hpp> // zx-todo
+
+#define PLANNER_LOGGER rclcpp::get_logger("diff_planner_manager")
+#define ROS_ERROR(...) RCLCPP_ERROR(PLANNER_LOGGER, __VA_ARGS__)
+#define ROS_WARN(...) RCLCPP_WARN(PLANNER_LOGGER, __VA_ARGS__)
+#define ROS_INFO(...) RCLCPP_INFO(PLANNER_LOGGER, __VA_ARGS__)
+
+namespace
+{
+template <typename T>
+void declare_and_get(const rclcpp::Node::SharedPtr &node, const std::string &name, T &value, const T &default_value)
+{
+  node->declare_parameter<T>(name, default_value);
+  node->get_parameter(name, value);
+}
+}
 
 namespace diff_planner
 {
@@ -12,23 +27,24 @@ namespace diff_planner
 
   DiffPlannerManager::~DiffPlannerManager() { std::cout << "des manager" << std::endl; }
 
-  void DiffPlannerManager::initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis)
+  void DiffPlannerManager::initPlanModules(const rclcpp::Node::SharedPtr &node, PlanningVisualization::Ptr vis)
   {
+    node_ = node;
     /* read algorithm parameters */
 
-    nh.param("manager/max_vel", pp_.max_vel_, -1.0);
-    nh.param("manager/max_acc", pp_.max_acc_, -1.0);
-    nh.param("manager/feasibility_tolerance", pp_.feasibility_tolerance_, 0.0);
-    nh.param("manager/polyTraj_piece_length", pp_.polyTraj_piece_length, -1.0);
-    nh.param("manager/planning_horizon", pp_.planning_horizen_, 5.0);
-    nh.param("manager/use_multitopology_trajs", pp_.use_multitopology_trajs, false);
-    nh.param("manager/drone_id", pp_.drone_id, -1);
+    declare_and_get(node_, "manager.max_vel", pp_.max_vel_, -1.0);
+    declare_and_get(node_, "manager.max_acc", pp_.max_acc_, -1.0);
+    declare_and_get(node_, "manager.feasibility_tolerance", pp_.feasibility_tolerance_, 0.0);
+    declare_and_get(node_, "manager.polyTraj_piece_length", pp_.polyTraj_piece_length, -1.0);
+    declare_and_get(node_, "manager.planning_horizon", pp_.planning_horizen_, 5.0);
+    declare_and_get(node_, "manager.use_multitopology_trajs", pp_.use_multitopology_trajs, false);
+    declare_and_get(node_, "manager.drone_id", pp_.drone_id, -1);
 
     grid_map_.reset(new GridMap);
-    grid_map_->initMap(nh);
+    grid_map_->initMap(node_);
 
     ploy_traj_opt_.reset(new PolyTrajOptimizer);
-    ploy_traj_opt_->setParam(nh);
+    ploy_traj_opt_->setParam(node_);
     ploy_traj_opt_->setEnvironment(grid_map_);
 
     visualization_ = vis;
@@ -43,11 +59,11 @@ namespace diff_planner
       const Eigen::Vector3d &local_target_vel, const bool flag_polyInit,
       const bool flag_randomPolyTraj, const bool touch_goal)
   {
-    ros::Time t_start = ros::Time::now();
-    ros::Duration t_init, t_opt;
+    rclcpp::Time t_start = node_->now();
+    rclcpp::Duration t_init(0, 0), t_opt(0, 0);
 
     static int count = 0;
-    cout << "\033[47;30m\n[" << t_start << "] Drone " << pp_.drone_id << " Replan " << count++ << "\033[0m" << endl;
+    cout << "\033[47;30m\n[" << t_start.seconds() << "] Drone " << pp_.drone_id << " Replan " << count++ << "\033[0m" << endl;
     // cout.precision(3);
     // cout << "start: " << start_pt.transpose() << ", " << start_vel.transpose() << "\ngoal:" << local_target_pt.transpose() << ", " << local_target_vel.transpose()
     //      << endl;
@@ -72,14 +88,14 @@ namespace diff_planner
       return false;
     }
 
-    t_init = ros::Time::now() - t_start;
+    t_init = node_->now() - t_start;
 
     std::vector<Eigen::Vector3d> point_set;
     for (int i = 0; i < cstr_pts.cols(); ++i)
       point_set.push_back(cstr_pts.col(i));
     visualization_->displayInitPathList(point_set, 0.2, 0);
 
-    t_start = ros::Time::now();
+    t_start = node_->now();
 
     /*** STEP 2: OPTIMIZE ***/
     bool flag_success = false;
@@ -128,7 +144,7 @@ namespace diff_planner
         }
       }
 
-      t_opt = ros::Time::now() - t_start;
+      t_opt = node_->now() - t_start;
 
       if (trajs.size() > 1)
       {
@@ -153,7 +169,7 @@ namespace diff_planner
                                                         innerPts, initTraj.getDurations(), final_cost);
       best_MJO = ploy_traj_opt_->getMinJerkOpt();
 
-      t_opt = ros::Time::now() - t_start;
+      t_opt = node_->now() - t_start;
     }
 
     /*** STEP 3: Store and display results ***/
@@ -162,10 +178,10 @@ namespace diff_planner
     {
       static double sum_time = 0;
       static int count_success = 0;
-      sum_time += (t_init + t_opt).toSec();
+      sum_time += (t_init + t_opt).seconds();
       count_success++;
       printf("Time:\033[42m%.3fms,\033[0m init:%.3fms, optimize:%.3fms, avg=%.3fms\n",
-             (t_init + t_opt).toSec() * 1000, t_init.toSec() * 1000, t_opt.toSec() * 1000, sum_time / count_success * 1000);
+             (t_init + t_opt).seconds() * 1000, t_init.seconds() * 1000, t_opt.seconds() * 1000, sum_time / count_success * 1000);
       // cout << "total time:\033[42m" << (t_init + t_opt).toSec()
       //      << "\033[0m,init:" << t_init.toSec()
       //      << ",optimize:" << t_opt.toSec()
@@ -276,7 +292,7 @@ namespace diff_planner
       }
 
       /* the trajectory time system is a little bit complicated... */
-      double passed_t_on_lctraj = ros::Time::now().toSec() - traj_.local_traj.start_time;
+      double passed_t_on_lctraj = node_->now().seconds() - traj_.local_traj.start_time;
       double t_to_lc_end = traj_.local_traj.duration - passed_t_on_lctraj;
       if (t_to_lc_end < 0)
       {
@@ -374,7 +390,7 @@ namespace diff_planner
     bool ret = ploy_traj_opt_->computePointsToCheck(traj, ConstraintPoints::two_thirds_id(cps, touch_goal), pts_to_check);
     if (ret && pts_to_check.size() >= 1 && pts_to_check.back().size() >= 1)
     {
-      traj_.setLocalTraj(traj, pts_to_check, ros::Time::now().toSec());
+      traj_.setLocalTraj(traj, pts_to_check, node_->now().seconds());
     }
 
     return ret;
@@ -485,8 +501,8 @@ namespace diff_planner
       des_vel /= 1.5;
     }
 
-    auto time_now = ros::Time::now();
-    traj_.setGlobalTraj(globalMJO.getTraj(), time_now.toSec());
+    auto time_now = node_->now();
+    traj_.setGlobalTraj(globalMJO.getTraj(), time_now.seconds());
 
     return true;
   }

@@ -1,138 +1,150 @@
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <iostream>
-#include <nav_msgs/Odometry.h>
-#include <traj_utils/MINCOTraj.h>
+#include <nav_msgs/msg/odometry.hpp>
+#include <traj_utils/msg/minco_traj.hpp>
 #include <optimizer/poly_traj_utils.hpp>
 
 using namespace std;
+using namespace std::chrono_literals;
 
-struct Traj_t
+class Traj2OdomNode : public rclcpp::Node
 {
-  poly_traj::Trajectory traj;
-  bool valid;
-  ros::Time start_time;
-  double duration;
-  double last_yaw;
-};
-
-vector<Traj_t> trajs_;
-ros::Subscriber one_traj_sub_;
-ros::Publisher other_odoms_pub_;
-
-void one_traj_sub_cb(const traj_utils::MINCOTrajPtr &msg)
-{
-
-  const int recv_id = msg->drone_id;
-
-  if (msg->drone_id < 0)
+public:
+  Traj2OdomNode() : Node("traj2odom")
   {
-    ROS_ERROR("drone_id < 0 is not allowed in a swarm system!");
-    return;
-  }
-  if (msg->order != 5)
-  {
-    ROS_ERROR("Only support trajectory order equals 5 now!");
-    return;
-  }
-  if (msg->duration.size() != (msg->inner_x.size() + 1))
-  {
-    ROS_ERROR("WRONG trajectory parameters.");
-    return;
-  }
-  if ((int)trajs_.size() > recv_id &&
-      (msg->start_time - trajs_[recv_id].start_time).toSec() <= 0)
-  {
-    ROS_WARN("Received drone %d's trajectory out of order or duplicated, abandon it.", (int)recv_id);
-    return;
+    double odom_hz;
+    this->declare_parameter<double>("odom_hz", 100.0);
+    odom_hz = this->get_parameter("odom_hz").as_double();
+
+    one_traj_sub_ = this->create_subscription<traj_utils::msg::MINCOTraj>(
+      "/broadcast_traj_to_planner", 100,
+      std::bind(&Traj2OdomNode::one_traj_sub_cb, this, std::placeholders::_1));
+    other_odoms_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/others_odom", 100);
+
+    int period_ms = (int)(1000.0 / odom_hz);
+    timer_ = this->create_wall_timer(
+      std::chrono::milliseconds(period_ms),
+      std::bind(&Traj2OdomNode::timer_callback, this));
   }
 
-  ros::Time t_now = ros::Time::now();
-  if (abs((t_now - msg->start_time).toSec()) > 0.25)
+private:
+  struct Traj_t
   {
-    if (abs((t_now - msg->start_time).toSec()) < 10.0) // 10 seconds offset, more likely to be caused by unsynced system time.
+    poly_traj::Trajectory traj;
+    bool valid;
+    rclcpp::Time start_time;
+    double duration;
+    double last_yaw;
+  };
+
+  vector<Traj_t> trajs_;
+  rclcpp::Subscription<traj_utils::msg::MINCOTraj>::SharedPtr one_traj_sub_;
+  rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr other_odoms_pub_;
+  rclcpp::TimerBase::SharedPtr timer_;
+
+  void one_traj_sub_cb(const traj_utils::msg::MINCOTraj::ConstSharedPtr &msg)
+  {
+    const int recv_id = msg->drone_id;
+
+    if (msg->drone_id < 0)
     {
-      ROS_WARN("Time stamp diff: Local - Remote Agent %d = %fs",
-               msg->drone_id, (t_now - msg->start_time).toSec());
-    }
-    else
-    {
-      ROS_ERROR("Time stamp diff: Local - Remote Agent %d = %fs, swarm time seems not synchronized, abandon!",
-                msg->drone_id, (t_now - msg->start_time).toSec());
+      RCLCPP_ERROR(this->get_logger(), "drone_id < 0 is not allowed in a swarm system!");
       return;
     }
-  }
-
-  /* Fill up the buffer */
-  if ((int)trajs_.size() <= recv_id)
-  {
-    for (int i = trajs_.size(); i <= recv_id; i++)
+    if (msg->order != 5)
     {
-      Traj_t blank;
-      blank.valid = false;
-      trajs_.push_back(blank);
+      RCLCPP_ERROR(this->get_logger(), "Only support trajectory order equals 5 now!");
+      return;
     }
+    if (msg->duration.size() != (msg->inner_x.size() + 1))
+    {
+      RCLCPP_ERROR(this->get_logger(), "WRONG trajectory parameters.");
+      return;
+    }
+    rclcpp::Time start_time(msg->start_time);
+
+    if ((int)trajs_.size() > recv_id &&
+        (start_time - trajs_[recv_id].start_time).seconds() <= 0)
+    {
+      RCLCPP_WARN(this->get_logger(), "Received drone %d's trajectory out of order or duplicated, abandon it.", (int)recv_id);
+      return;
+    }
+
+    rclcpp::Time t_now = this->now();
+    if (abs((t_now - start_time).seconds()) > 0.25)
+    {
+      if (abs((t_now - start_time).seconds()) < 10.0)
+      {
+        RCLCPP_WARN(this->get_logger(), "Time stamp diff: Local - Remote Agent %d = %fs",
+                 msg->drone_id, (t_now - start_time).seconds());
+      }
+      else
+      {
+        RCLCPP_ERROR(this->get_logger(), "Time stamp diff: Local - Remote Agent %d = %fs, swarm time seems not synchronized, abandon!",
+                  msg->drone_id, (t_now - start_time).seconds());
+        return;
+      }
+    }
+
+    /* Fill up the buffer */
+    if ((int)trajs_.size() <= recv_id)
+    {
+      for (int i = trajs_.size(); i <= recv_id; i++)
+      {
+        Traj_t blank;
+        blank.valid = false;
+        trajs_.push_back(blank);
+      }
+    }
+
+    /* Store data */
+    int piece_nums = msg->duration.size();
+    Eigen::Matrix<double, 3, 3> headState, tailState;
+    headState << msg->start_p[0], msg->start_v[0], msg->start_a[0],
+        msg->start_p[1], msg->start_v[1], msg->start_a[1],
+        msg->start_p[2], msg->start_v[2], msg->start_a[2];
+    tailState << msg->end_p[0], msg->end_v[0], msg->end_a[0],
+        msg->end_p[1], msg->end_v[1], msg->end_a[1],
+        msg->end_p[2], msg->end_v[2], msg->end_a[2];
+    Eigen::MatrixXd innerPts(3, piece_nums - 1);
+    Eigen::VectorXd durations(piece_nums);
+    for (int i = 0; i < piece_nums - 1; i++)
+      innerPts.col(i) << msg->inner_x[i], msg->inner_y[i], msg->inner_z[i];
+    for (int i = 0; i < piece_nums; i++)
+      durations(i) = msg->duration[i];
+    poly_traj::MinJerkOpt MJO;
+    MJO.reset(headState, tailState, piece_nums);
+    MJO.generate(innerPts, durations);
+
+    trajs_[recv_id].traj = MJO.getTraj();
+    trajs_[recv_id].start_time = start_time;
+    trajs_[recv_id].valid = true;
+    trajs_[recv_id].duration = trajs_[recv_id].traj.getTotalDuration();
   }
 
-  /* Store data */;
-  int piece_nums = msg->duration.size();
-  Eigen::Matrix<double, 3, 3> headState, tailState;
-  headState << msg->start_p[0], msg->start_v[0], msg->start_a[0],
-      msg->start_p[1], msg->start_v[1], msg->start_a[1],
-      msg->start_p[2], msg->start_v[2], msg->start_a[2];
-  tailState << msg->end_p[0], msg->end_v[0], msg->end_a[0],
-      msg->end_p[1], msg->end_v[1], msg->end_a[1],
-      msg->end_p[2], msg->end_v[2], msg->end_a[2];
-  Eigen::MatrixXd innerPts(3, piece_nums - 1);
-  Eigen::VectorXd durations(piece_nums);
-  for (int i = 0; i < piece_nums - 1; i++)
-    innerPts.col(i) << msg->inner_x[i], msg->inner_y[i], msg->inner_z[i];
-  for (int i = 0; i < piece_nums; i++)
-    durations(i) = msg->duration[i];
-  poly_traj::MinJerkOpt MJO;
-  MJO.reset(headState, tailState, piece_nums);
-  MJO.generate(innerPts, durations);
-
-  trajs_[recv_id].traj = MJO.getTraj();
-  trajs_[recv_id].start_time = msg->start_time;
-  trajs_[recv_id].valid = true;
-  trajs_[recv_id].duration = trajs_[recv_id].traj.getTotalDuration();
-}
-
-int main(int argc, char **argv)
-{
-  ros::init(argc, argv, "traj2odom");
-  ros::NodeHandle nh("~");
-
-  double odom_hz;
-  nh.param("odom_hz", odom_hz, 100.0);
-
-  one_traj_sub_ = nh.subscribe("/broadcast_traj_to_planner", 100, one_traj_sub_cb, ros::TransportHints().tcpNoDelay());
-  other_odoms_pub_ = nh.advertise<nav_msgs::Odometry>("/others_odom", 100);
-
-  ros::Rate loop_rate(odom_hz);
-  while (ros::ok())
+  void timer_callback()
   {
-    auto t_now = ros::Time::now();
+    auto t_now = this->now();
 
     for (int id = 0; id < (int)trajs_.size(); ++id)
     {
       if (trajs_[id].valid)
       {
-        double t_to_start = (t_now - trajs_[id].start_time).toSec();
+        double t_to_start = (t_now - trajs_[id].start_time).seconds();
         if (t_to_start <= trajs_[id].duration)
         {
           double t = t_to_start;
           Eigen::Vector3d p = trajs_[id].traj.getPos(t);
           Eigen::Vector3d v = trajs_[id].traj.getVel(t);
-          double yaw = v.head(2).norm() > 0.01 ? atan2(v(1), v(0)) : trajs_[id].last_yaw; //
+          double yaw = v.head(2).norm() > 0.01 ? atan2(v(1), v(0)) : trajs_[id].last_yaw;
           trajs_[id].last_yaw = yaw;
           Eigen::AngleAxisd rotation_vector(yaw, Eigen::Vector3d::UnitZ());
           Eigen::Quaterniond q = Eigen::Quaterniond(rotation_vector);
 
-          nav_msgs::Odometry msg;
+          nav_msgs::msg::Odometry msg;
           msg.header.frame_id = string("world");
           msg.header.stamp = t_now;
           msg.child_frame_id = string("drone_") + to_string(id);
@@ -147,14 +159,18 @@ int main(int argc, char **argv)
           msg.twist.twist.linear.y = v(1);
           msg.twist.twist.linear.z = v(2);
 
-          other_odoms_pub_.publish(msg);
+          other_odoms_pub_->publish(msg);
         }
       }
     }
-
-    loop_rate.sleep();
-    ros::spinOnce();
   }
+};
 
+int main(int argc, char **argv)
+{
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<Traj2OdomNode>();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }

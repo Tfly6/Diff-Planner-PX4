@@ -4,10 +4,10 @@
 #include <stdlib.h>
 
 #include <optimizer/poly_traj_optimizer.h>
-#include <traj_utils/DataDisp.h>
+#include <traj_utils/msg/data_disp.hpp>
 #include <plan_env/grid_map.h>
 #include <traj_utils/plan_container.hpp>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <traj_utils/planning_visualization.h>
 #include <optimizer/poly_traj_utils.hpp>
 
@@ -27,7 +27,7 @@ namespace diff_planner
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /* main planning interface */
-    void initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis = NULL);
+    void initPlanModules(const rclcpp::Node::SharedPtr &node, PlanningVisualization::Ptr vis = nullptr);
     bool computeInitState(
         const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel,
         const Eigen::Vector3d &start_acc, const Eigen::Vector3d &local_target_pt,
@@ -60,6 +60,7 @@ namespace diff_planner
 
   private:
     PlanningVisualization::Ptr visualization_;
+    rclcpp::Node::SharedPtr node_;
 
     PolyTrajOptimizer::Ptr ploy_traj_opt_;
 

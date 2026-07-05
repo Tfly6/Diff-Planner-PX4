@@ -27,40 +27,45 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef RVIZ_POSE_TOOL_H
-#define RVIZ_POSE_TOOL_H
+#ifndef RVIZ_PLUGINS__POSE_TOOL_H_
+#define RVIZ_PLUGINS__POSE_TOOL_H_
 
-#include <OGRE/OgreVector3.h>
+#include <memory>
+#include <vector>
 
-#include <QCursor>
+#include <OgreQuaternion.h>
+#include <OgreVector3.h>
 
-#include <ros/ros.h>
+#include "rviz_common/tool.hpp"
 
-#include "rviz/tool.h"
-
-namespace rviz
+namespace rviz_rendering
 {
 class Arrow;
-class DisplayContext;
+class ViewportProjectionFinder;
+}  // namespace rviz_rendering
 
-class Pose3DTool : public Tool
+namespace rviz_plugins
+{
+
+class Pose3DTool : public rviz_common::Tool
 {
 public:
   Pose3DTool();
-  virtual ~Pose3DTool();
+  ~Pose3DTool() override;
 
-  virtual void onInitialize();
+  void onInitialize() override;
 
-  virtual void activate();
-  virtual void deactivate();
+  void activate() override;
+  void deactivate() override;
 
-  virtual int processMouseEvent(ViewportMouseEvent& event);
+  int processMouseEvent(rviz_common::ViewportMouseEvent & event) override;
 
 protected:
   virtual void onPoseSet(double x, double y, double z, double theta) = 0;
 
-  Arrow*              arrow_;
-  std::vector<Arrow*> arrow_array;
+  std::shared_ptr<rviz_rendering::Arrow> arrow_;
+  std::vector<std::shared_ptr<rviz_rendering::Arrow>> arrow_array_;
+  std::shared_ptr<rviz_rendering::ViewportProjectionFinder> projection_finder_;
 
   enum State
   {
@@ -71,7 +76,11 @@ protected:
   State state_;
 
   Ogre::Vector3 pos_;
+  double prev_angle_;
+  double init_z_;
+  double prev_z_;
 };
-}
 
-#endif
+}  // namespace rviz_plugins
+
+#endif  // RVIZ_PLUGINS__POSE_TOOL_H_

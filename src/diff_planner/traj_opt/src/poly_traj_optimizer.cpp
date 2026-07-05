@@ -9,6 +9,16 @@ using namespace std;
 
 namespace diff_planner
 {
+  namespace
+  {
+    template <typename T>
+    void declare_and_get(const rclcpp::Node::SharedPtr &node, const std::string &name, T &value, const T &default_value)
+    {
+      node->declare_parameter<T>(name, default_value);
+      node->get_parameter(name, value);
+    }
+  }
+
   /* main planning API */
   bool PolyTrajOptimizer::optimizeTrajectory(
       const Eigen::MatrixXd &iniState, const Eigen::MatrixXd &finState,
@@ -22,14 +32,14 @@ namespace diff_planner
     }
 
     // Preparision 1: Some mise params
-    ros::Time t0 = ros::Time::now(), t1, t2;
+    rclcpp::Time t0 = clock_->now(), t1 = clock_->now(), t2 = clock_->now();
     int restart_nums = 0, rebound_times = 0;
     bool flag_force_return, flag_still_unsafe, flag_success, flag_swarm_too_close;
     multitopology_data_.initial_obstacles_avoided = false;
     wei_swarm_mod_ = wei_swarm_;
 
     // Preparision 2: Trajectory related params
-    t_now_ = ros::Time::now().toSec();
+    t_now_ = clock_->now().seconds();
     piece_num_ = initT.size();
     jerkOpt_.reset(iniState, finState, piece_num_);
     variable_num_ = 4 * (piece_num_ - 1) + 1;
@@ -59,7 +69,7 @@ namespace diff_planner
       flag_swarm_too_close = false;
 
       /* ---------- optimize ---------- */
-      t1 = ros::Time::now();
+      t1 = clock_->now();
       int result = lbfgs::lbfgs_optimize(
           variable_num_,
           x_init,
@@ -70,9 +80,9 @@ namespace diff_planner
           this,
           &lbfgs_params);
 
-      t2 = ros::Time::now();
-      double time_ms = (t2 - t1).toSec() * 1000;
-      double total_time_ms = (t2 - t0).toSec() * 1000;
+      t2 = clock_->now();
+      double time_ms = (t2 - t1).seconds() * 1000;
+      double total_time_ms = (t2 - t0).seconds() * 1000;
 
       /* ---------- get result and check collision ---------- */
       if (result == lbfgs::LBFGS_CONVERGENCE ||
@@ -1666,23 +1676,24 @@ namespace diff_planner
   }
 
   /* helper functions */
-  void PolyTrajOptimizer::setParam(ros::NodeHandle &nh)
+  void PolyTrajOptimizer::setParam(const rclcpp::Node::SharedPtr &node)
   {
-    nh.param("optimization/constraint_points_perPiece", cps_num_prePiece_, -1);
-    nh.param("optimization/weight_obstacle", wei_obs_, -1.0);
-    nh.param("optimization/weight_obstacle_soft", wei_obs_soft_, -1.0);
-    nh.param("optimization/weight_swarm", wei_swarm_, -1.0);
-    nh.param("optimization/weight_feasibility", wei_feas_, -1.0);
-    nh.param("optimization/weight_sqrvariance", wei_sqrvar_, -1.0);
-    nh.param("optimization/weight_time", wei_time_, -1.0);
-    nh.param("optimization/obstacle_clearance", obs_clearance_, -1.0);
-    nh.param("optimization/obstacle_clearance_soft", obs_clearance_soft_, -1.0);
-    nh.param("optimization/swarm_clearance", swarm_clearance_, -1.0);
-    nh.param("optimization/max_vel", max_vel_, -1.0);
-    nh.param("optimization/vel_tolerance", vel_tolerance_, -1.0);
-    nh.param("optimization/max_acc", max_acc_, -1.0);
-    nh.param("optimization/acc_tolerance", acc_tolerance_, -1.0);
-    nh.param("optimization/max_jer", max_jer_, -1.0);
+    clock_ = node->get_clock();
+    declare_and_get(node, "optimization.constraint_points_perPiece", cps_num_prePiece_, -1);
+    declare_and_get(node, "optimization.weight_obstacle", wei_obs_, -1.0);
+    declare_and_get(node, "optimization.weight_obstacle_soft", wei_obs_soft_, -1.0);
+    declare_and_get(node, "optimization.weight_swarm", wei_swarm_, -1.0);
+    declare_and_get(node, "optimization.weight_feasibility", wei_feas_, -1.0);
+    declare_and_get(node, "optimization.weight_sqrvariance", wei_sqrvar_, -1.0);
+    declare_and_get(node, "optimization.weight_time", wei_time_, -1.0);
+    declare_and_get(node, "optimization.obstacle_clearance", obs_clearance_, -1.0);
+    declare_and_get(node, "optimization.obstacle_clearance_soft", obs_clearance_soft_, -1.0);
+    declare_and_get(node, "optimization.swarm_clearance", swarm_clearance_, -1.0);
+    declare_and_get(node, "optimization.max_vel", max_vel_, -1.0);
+    declare_and_get(node, "optimization.vel_tolerance", vel_tolerance_, -1.0);
+    declare_and_get(node, "optimization.max_acc", max_acc_, -1.0);
+    declare_and_get(node, "optimization.acc_tolerance", acc_tolerance_, -1.0);
+    declare_and_get(node, "optimization.max_jer", max_jer_, -1.0);
   }
 
   void PolyTrajOptimizer::setEnvironment(const GridMap::Ptr &map)

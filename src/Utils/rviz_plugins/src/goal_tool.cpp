@@ -27,30 +27,27 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <tf/transform_listener.h>
-
-#include <geometry_msgs/PoseStamped.h>
-
-#include "rviz/display_context.h"
-#include "rviz/properties/string_property.h"
-
-#include <quadrotor_msgs/GoalSet.h>
+#include <cmath>
 
 #include "goal_tool.h"
 
-namespace rviz
+#include "pluginlib/class_list_macros.hpp"
+#include "rviz_common/display_context.hpp"
+
+namespace rviz_plugins
 {
 
 Goal3DTool::Goal3DTool()
 {
   shortcut_key_ = 'g';
 
-  topic_property_ = new StringProperty("Topic", "goal",
-                                       "The topic on which to publish navigation goals.",
-                                       getPropertyContainer(), SLOT(updateTopic()), this);
-  // topic_property_droneID_ = new StringProperty("Topic", "goal_with_id",
-  //                                              "The topic on which to publish navigation goals.",
-  //                                              getPropertyContainer(), SLOT(updateTopic()), this);
+  topic_property_ = new rviz_common::properties::StringProperty(
+    "Topic",
+    "goal",
+    "The topic on which to publish navigation goals.",
+    getPropertyContainer(),
+    SLOT(updateTopic()),
+    this);
 }
 
 void Goal3DTool::onInitialize()
@@ -62,33 +59,48 @@ void Goal3DTool::onInitialize()
 
 void Goal3DTool::updateTopic()
 {
-  pub_goal_ = nh_.advertise<geometry_msgs::PoseStamped>(topic_property_->getStdString(), 1);
-  pub_droneID_goal_ = nh_.advertise<quadrotor_msgs::GoalSet>("/goal_with_id", 1);
+  auto ros_node_abstraction = context_->getRosNodeAbstraction().lock();
+  if (!ros_node_abstraction) {
+    return;
+  }
+
+  raw_node_ = ros_node_abstraction->get_raw_node();
+  pub_goal_ = raw_node_->create_publisher<geometry_msgs::msg::PoseStamped>(
+    topic_property_->getStdString(), rclcpp::QoS(1));
+  pub_drone_id_goal_ = raw_node_->create_publisher<quadrotor_msgs::msg::GoalSet>(
+    "/goal_with_id", rclcpp::QoS(1));
 }
 
 void Goal3DTool::onPoseSet(double x, double y, double z, double theta)
 {
-  ROS_WARN("3D Goal Set");
-  std::string fixed_frame = context_->getFixedFrame().toStdString();
-  tf::Quaternion quat;
-  quat.setRPY(0.0, 0.0, theta);
-  tf::Stamped<tf::Pose> p = tf::Stamped<tf::Pose>(tf::Pose(quat, tf::Point(x, y, z)), ros::Time::now(), fixed_frame);
-  geometry_msgs::PoseStamped goal;
-  tf::poseStampedTFToMsg(p, goal);
-  ROS_INFO("Setting goal: Frame:%s, Position(%.3f, %.3f, %.3f), Orientation(%.3f, %.3f, %.3f, %.3f) = Angle: %.3f\n", fixed_frame.c_str(),
-           goal.pose.position.x, goal.pose.position.y, goal.pose.position.z,
-           goal.pose.orientation.x, goal.pose.orientation.y, goal.pose.orientation.z, goal.pose.orientation.w, theta);
-  pub_goal_.publish(goal);
+  if (!raw_node_) {
+    updateTopic();
+  }
+  if (!raw_node_ || !pub_goal_ || !pub_drone_id_goal_) {
+    return;
+  }
 
-  quadrotor_msgs::GoalSet goal_with_id;
+  const std::string fixed_frame = context_->getFixedFrame().toStdString();
+  geometry_msgs::msg::PoseStamped goal;
+  goal.header.frame_id = fixed_frame;
+  goal.header.stamp = raw_node_->now();
+  goal.pose.position.x = x;
+  goal.pose.position.y = y;
+  goal.pose.position.z = z;
+  goal.pose.orientation.x = 0.0;
+  goal.pose.orientation.y = 0.0;
+  goal.pose.orientation.z = std::sin(theta * 0.5);
+  goal.pose.orientation.w = std::cos(theta * 0.5);
+  pub_goal_->publish(goal);
+
+  quadrotor_msgs::msg::GoalSet goal_with_id;
   goal_with_id.drone_id = 0;
-  goal_with_id.goal[0] = x;
-  goal_with_id.goal[1] = y;
-  goal_with_id.goal[2] = z;
-  pub_droneID_goal_.publish(goal_with_id);
+  goal_with_id.goal[0] = static_cast<float>(x);
+  goal_with_id.goal[1] = static_cast<float>(y);
+  goal_with_id.goal[2] = static_cast<float>(z);
+  pub_drone_id_goal_->publish(goal_with_id);
 }
 
-} // end namespace rviz
+}  // namespace rviz_plugins
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(rviz::Goal3DTool, rviz::Tool)
+PLUGINLIB_EXPORT_CLASS(rviz_plugins::Goal3DTool, rviz_common::Tool)

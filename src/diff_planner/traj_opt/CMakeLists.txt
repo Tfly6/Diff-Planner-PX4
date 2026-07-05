@@ -1,43 +1,52 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.8)
 project(traj_opt)
 
-set(CMAKE_BUILD_TYPE "Release")
-ADD_COMPILE_OPTIONS(-std=c++11 )
-ADD_COMPILE_OPTIONS(-std=c++14 )
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_BUILD_TYPE Release)
+
+find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(PCL 1.7 REQUIRED)
+find_package(path_searching REQUIRED)
+find_package(plan_env REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(traj_utils REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  rospy
-  std_msgs
-  visualization_msgs
-  plan_env
-  cv_bridge
-  traj_utils
+add_library(${PROJECT_NAME}
+  src/poly_traj_optimizer.cpp
+)
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${CMAKE_CURRENT_SOURCE_DIR}/../traj_utils/include
+  ${EIGEN3_INCLUDE_DIRS}
+)
+
+ament_target_dependencies(${PROJECT_NAME}
   path_searching
+  plan_env
+  rclcpp
+  traj_utils
 )
 
-catkin_package(
- INCLUDE_DIRS include
- LIBRARIES traj_opt
- CATKIN_DEPENDS plan_env 
-#  DEPENDS system_lib
+install(TARGETS ${PROJECT_NAME}
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
-include_directories( 
-    SYSTEM 
-    include 
-    ${catkin_INCLUDE_DIRS}
-    ${Eigen3_INCLUDE_DIRS} 
-    ${PCL_INCLUDE_DIRS}
+install(DIRECTORY include/
+  DESTINATION include
 )
 
-add_library( traj_opt 
-    src/poly_traj_optimizer.cpp 
-    )
-target_link_libraries( traj_opt
-    ${catkin_LIBRARIES} 
-    )  
+ament_export_include_directories(include)
+ament_export_libraries(${PROJECT_NAME})
+ament_export_dependencies(path_searching plan_env rclcpp traj_utils)
+
+ament_package()

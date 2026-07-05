@@ -20,49 +20,53 @@
  *  Created on: December 5th 2019
  */
 
-#ifndef SELECTED_POINTS_PUBLISHER_HPP
-#define SELECTED_POINTS_PUBLISHER_HPP
+#ifndef SELECTED_POINTS_PUBLISHER__SELECTED_POINTS_PUBLISHER_HPP_
+#define SELECTED_POINTS_PUBLISHER__SELECTED_POINTS_PUBLISHER_HPP_
 
 #ifndef Q_MOC_RUN  // See: https://bugreports.qt-project.org/browse/QTBUG-22829
-#include <ros/node_handle.h>
-#include <ros/publisher.h>
-#include "rviz/tool.h"
-#include <QCursor>
 #include <QObject>
 #endif
 
-#include <geometry_msgs/PoseStamped.h>
-#include "rviz/default_plugin/tools/selection_tool.h"
+#include <string>
+#include <vector>
+
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "rclcpp/node.hpp"
+
+#include "rviz_default_plugins/tools/select/selection_tool.hpp"
+#include "rviz_rendering/viewport_projection_finder.hpp"
 
 namespace rviz_plugin_selected_points_publisher
 {
-class SelectedPointsPublisher;
 
-class SelectedPointsPublisher : public rviz::SelectionTool
+class SelectedPointsPublisher : public rviz_default_plugins::tools::SelectionTool
 {
   Q_OBJECT
 public:
   SelectedPointsPublisher();
-  virtual ~SelectedPointsPublisher();
-  virtual int processMouseEvent(rviz::ViewportMouseEvent& event);
-  virtual int processKeyEvent(QKeyEvent* event, rviz::RenderPanel* panel);
+  ~SelectedPointsPublisher() override;
+  void onInitialize() override;
+  int processMouseEvent(rviz_common::ViewportMouseEvent & event) override;
+  int processKeyEvent(QKeyEvent * event, rviz_common::RenderPanel * panel) override;
 
 public Q_SLOTS:
   void updateTopic();
 
 protected:
   int processSelectedArea();
-  ros::NodeHandle node_handle_;
-  ros::Publisher rviz_selected_publisher_, goal_publisher_;
+  rclcpp::Node::SharedPtr raw_node_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr rviz_selected_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_publisher_;
 
   std::string tf_frame_;
   std::string selected_drones_topic_, goal_topic_;
 
-  std::vector<geometry_msgs::PoseStamped> selected_drones_;
+  std::vector<geometry_msgs::msg::PoseStamped> selected_drones_;
+  std::shared_ptr<rviz_rendering::ViewportProjectionFinder> projection_finder_;
 
   bool selecting_;
   int num_selected_points_;
 };
 }  // namespace rviz_plugin_selected_points_publisher
 
-#endif  // SELECTED_POINTS_PUBLISHER_HPP
+#endif  // SELECTED_POINTS_PUBLISHER__SELECTED_POINTS_PUBLISHER_HPP_

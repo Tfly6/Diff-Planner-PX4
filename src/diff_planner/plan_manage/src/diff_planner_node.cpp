@@ -32,8 +32,7 @@
 //   return 0;
 // }
 
-#include <ros/ros.h>
-#include <visualization_msgs/Marker.h>
+#include <rclcpp/rclcpp.hpp>
 
 #include <plan_manage/diff_replan_fsm.h>
 
@@ -42,15 +41,15 @@ using namespace diff_planner;
 int main(int argc, char **argv)
 {
 
-  ros::init(argc, argv, "diff_planner_node");
-  ros::NodeHandle nh("~");
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<rclcpp::Node>("diff_planner_node");
 
   DiffReplanFSM rebo_replan;
 
-  rebo_replan.init(nh);
+  rebo_replan.init(node);
 
-  // ros::Duration(1.0).sleep();
-  ros::spin();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
 
   return 0;
 }

@@ -4,10 +4,17 @@
 #include <Eigen/Eigen>
 #include <path_searching/dyn_a_star.h>
 #include <plan_env/grid_map.h>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include "optimizer/lbfgs.hpp"
 #include <traj_utils/plan_container.hpp>
 #include "poly_traj_utils.hpp"
+
+#define TRAJ_OPT_LOGGER rclcpp::get_logger("traj_opt")
+#define ROS_ERROR(...) RCLCPP_ERROR(TRAJ_OPT_LOGGER, __VA_ARGS__)
+#define ROS_WARN(...) RCLCPP_WARN(TRAJ_OPT_LOGGER, __VA_ARGS__)
+#define ROS_WARN_COND(cond, ...) do { if (cond) RCLCPP_WARN(TRAJ_OPT_LOGGER, __VA_ARGS__); } while (0)
+#define ROS_ERROR_COND(cond, ...) do { if (cond) RCLCPP_ERROR(TRAJ_OPT_LOGGER, __VA_ARGS__); } while (0)
+#define ROS_WARN_STREAM(msg) RCLCPP_WARN_STREAM(TRAJ_OPT_LOGGER, msg)
 
 namespace diff_planner
 {
@@ -102,6 +109,7 @@ namespace diff_planner
     double max_vel_, max_acc_, max_jer_, vel_tolerance_, acc_tolerance_;                          // dynamic limits
 
     double t_now_;
+    rclcpp::Clock::SharedPtr clock_;
 
   public:
     PolyTrajOptimizer() {}
@@ -115,7 +123,7 @@ namespace diff_planner
     };
 
     /* set variables */
-    void setParam(ros::NodeHandle &nh);
+    void setParam(const rclcpp::Node::SharedPtr &node);
     void setEnvironment(const GridMap::Ptr &map);
     void setControlPoints(const Eigen::MatrixXd &points);
     void setSwarmTrajs(SwarmTrajData *swarm_trajs_ptr);

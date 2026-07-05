@@ -4,23 +4,22 @@
 #include <Eigen/Eigen>
 #include <algorithm>
 #include <iostream>
-#include <nav_msgs/Path.h>
-#include <sensor_msgs/Imu.h>
-#include <ros/ros.h>
-#include <std_msgs/Empty.h>
-#include <std_msgs/Float64.h>
+#include <nav_msgs/msg/path.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/empty.hpp>
+#include <std_msgs/msg/float64.hpp>
 #include <vector>
-#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/msg/marker.hpp>
 
 #include <optimizer/poly_traj_optimizer.h>
 #include <plan_env/grid_map.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <quadrotor_msgs/GoalSet.h>
-#include <traj_utils/DataDisp.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <quadrotor_msgs/msg/goal_set.hpp>
+#include <traj_utils/msg/data_disp.hpp>
 #include <plan_manage/planner_manager.h>
 #include <traj_utils/planning_visualization.h>
-#include <traj_utils/PolyTraj.h>
-#include <traj_utils/MINCOTraj.h>
+#include <traj_utils/msg/poly_traj.hpp>
+#include <traj_utils/msg/minco_traj.hpp>
 
 using std::vector;
 
@@ -33,7 +32,7 @@ namespace diff_planner
     DiffReplanFSM() {}
     ~DiffReplanFSM() {}
 
-    void init(ros::NodeHandle &nh);
+    void init(const rclcpp::Node::SharedPtr &node);
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -65,7 +64,7 @@ namespace diff_planner
     /* planning utils */
     DiffPlannerManager::Ptr planner_manager_;
     PlanningVisualization::Ptr visualization_;
-    traj_utils::DataDisp data_disp_;
+    traj_utils::msg::DataDisp data_disp_;
 
     /* parameters */
     int target_type_; // 1 mannual select, 2 hard code
@@ -93,19 +92,26 @@ namespace diff_planner
     std::vector<Eigen::Vector3d> wps_;
 
     /* ROS utils */
-    ros::NodeHandle node_;
-    ros::Timer exec_timer_, safety_timer_;
-    ros::Subscriber waypoint_sub_, odom_sub_, trigger_sub_, broadcast_ploytraj_sub_, mandatory_stop_sub_;
-    ros::Publisher poly_traj_pub_, data_disp_pub_, broadcast_ploytraj_pub_, heartbeat_pub_, ground_height_pub_;
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::TimerBase::SharedPtr exec_timer_, safety_timer_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr waypoint_sub_, trigger_sub_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+    rclcpp::Subscription<traj_utils::msg::MINCOTraj>::SharedPtr broadcast_ploytraj_sub_;
+    rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr mandatory_stop_sub_;
+    rclcpp::Publisher<traj_utils::msg::PolyTraj>::SharedPtr poly_traj_pub_;
+    rclcpp::Publisher<traj_utils::msg::DataDisp>::SharedPtr data_disp_pub_;
+    rclcpp::Publisher<traj_utils::msg::MINCOTraj>::SharedPtr broadcast_ploytraj_pub_;
+    rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr heartbeat_pub_;
+    rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr ground_height_pub_;
 
     /* state machine functions */
-    void execFSMCallback(const ros::TimerEvent &e);
+    void execFSMCallback();
     void changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call);
     void printFSMExecState();
     std::pair<int, DiffReplanFSM::FSM_EXEC_STATE> timesOfConsecutiveStateCalls();
 
     /* safety */
-    void checkCollisionCallback(const ros::TimerEvent &e);
+    void checkCollisionCallback();
     bool callEmergencyStop(Eigen::Vector3d stop_pos);
 
     /* local planning */
@@ -114,18 +120,18 @@ namespace diff_planner
     bool planFromLocalTraj(const int trial_times = 1);
 
     /* global trajectory */
-    void waypointCallback(const geometry_msgs::PoseStampedPtr &msg);
+    void waypointCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
     void readGivenWpsAndPlan();
     bool planNextWaypoint(const Eigen::Vector3d next_wp, bool flag_2replan);
     bool mondifyInCollisionFinalGoal();
     void finishProcess();
 
     /* input-output */
-    void mandatoryStopCallback(const std_msgs::Empty &msg);
-    void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
-    void triggerCallback(const geometry_msgs::PoseStampedPtr &msg);
-    void RecvBroadcastMINCOTrajCallback(const traj_utils::MINCOTrajConstPtr &msg);
-    void polyTraj2ROSMsg(traj_utils::PolyTraj &poly_msg, traj_utils::MINCOTraj &MINCO_msg);
+    void mandatoryStopCallback(const std_msgs::msg::Empty::SharedPtr msg);
+    void odometryCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &msg);
+    void triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+    void RecvBroadcastMINCOTrajCallback(const traj_utils::msg::MINCOTraj::ConstSharedPtr &msg);
+    void polyTraj2ROSMsg(traj_utils::msg::PolyTraj &poly_msg, traj_utils::msg::MINCOTraj &MINCO_msg);
 
     /* ground height measurement */
     bool measureGroundHeight(double &height);

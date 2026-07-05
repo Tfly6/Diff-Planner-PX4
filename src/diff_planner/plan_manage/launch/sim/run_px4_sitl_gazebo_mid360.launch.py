@@ -1,0 +1,171 @@
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def planner_params(map_size_x, map_size_y, map_size_z):
+    return {
+        'fsm.flight_type': 1,
+        'fsm.thresh_replan_time': 1.0,
+        'fsm.planning_horizon': 7.5,
+        'fsm.emergency_time': 1.0,
+        'fsm.realworld_experiment': True,
+        'fsm.fail_safe': True,
+        'fsm.mondify_final_goal': True,
+        'fsm.enable_stuck_detect': True,
+        'fsm.waypoint_num': 1,
+        'grid_map.resolution': 0.1,
+        'grid_map.map_size_x': map_size_x,
+        'grid_map.map_size_y': map_size_y,
+        'grid_map.map_size_z': map_size_z,
+        'grid_map.local_update_range_x': 5.5,
+        'grid_map.local_update_range_y': 5.5,
+        'grid_map.local_update_range_z': 2.0,
+        'grid_map.obstacles_inflation': 0.1,
+        'grid_map.local_map_margin': 10,
+        'grid_map.ground_height': -0.01,
+        'grid_map.use_depth_filter': True,
+        'grid_map.depth_filter_tolerance': 0.15,
+        'grid_map.depth_filter_maxdist': 5.0,
+        'grid_map.depth_filter_mindist': 0.2,
+        'grid_map.depth_filter_margin': 2,
+        'grid_map.k_depth_scaling_factor': 1000.0,
+        'grid_map.skip_pixel': 2,
+        'grid_map.p_hit': 0.65,
+        'grid_map.p_miss': 0.35,
+        'grid_map.p_min': 0.12,
+        'grid_map.p_max': 0.90,
+        'grid_map.p_occ': 0.80,
+        'grid_map.fading_time': 1000.0,
+        'grid_map.min_ray_length': 0.1,
+        'grid_map.max_ray_length': 4.5,
+        'grid_map.visualization_truncate_height': 1.9,
+        'grid_map.show_occ_time': False,
+        'grid_map.pose_type': -1,
+        'grid_map.frame_id': 'world',
+        'manager.max_vel': 1.5,
+        'manager.max_acc': 6.0,
+        'manager.polyTraj_piece_length': 1.5,
+        'manager.feasibility_tolerance': 0.05,
+        'manager.planning_horizon': 7.5,
+        'manager.use_multitopology_trajs': False,
+        'manager.drone_id': 0,
+        'optimization.constraint_points_perPiece': 5,
+        'optimization.weight_obstacle': 10000.0,
+        'optimization.weight_obstacle_soft': 5000.0,
+        'optimization.weight_swarm': 10000.0,
+        'optimization.weight_feasibility': 10000.0,
+        'optimization.weight_sqrvariance': 10000.0,
+        'optimization.weight_time': 10.0,
+        'optimization.obstacle_clearance': 0.1,
+        'optimization.obstacle_clearance_soft': 0.5,
+        'optimization.swarm_clearance': 0.15000000000000002,
+        'optimization.max_vel': 1.5,
+        'optimization.vel_tolerance': 1.0,
+        'optimization.max_acc': 6.0,
+        'optimization.acc_tolerance': 1.0,
+        'optimization.max_jer': 20.0,
+        'optimization.record_opt': True,
+    }
+
+
+def generate_launch_description():
+    pkg_share = FindPackageShare('diff_planner')
+    map_size_x = LaunchConfiguration('map_size_x')
+    map_size_y = LaunchConfiguration('map_size_y')
+    map_size_z = LaunchConfiguration('map_size_z')
+    odom_topic = LaunchConfiguration('odom_topic')
+    cmd_topic = LaunchConfiguration('cmd_topic')
+
+    return LaunchDescription([
+        DeclareLaunchArgument('map_size_x', default_value='200.0'),
+        DeclareLaunchArgument('map_size_y', default_value='200.0'),
+        DeclareLaunchArgument('map_size_z', default_value='3.0'),
+        DeclareLaunchArgument('odom_topic', default_value='/mavros/local_position/odom'),
+        DeclareLaunchArgument('cmd_topic', default_value='/drone_0_planning/pos_cmd'),
+        DeclareLaunchArgument('enable_manual_take_over', default_value='false'),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='world_map_linker',
+            arguments=['0', '0', '0', '0', '0', '0', 'world', 'map'],
+        ),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='tf_lidar',
+            arguments=['0.07', '0', '0.072', '0', '0.3925', '0', 'base_link', 'livox_link'],
+        ),
+        Node(
+            package='diff_planner',
+            executable='pointcloud_to_world.py',
+            name='pointcloud_to_world',
+            output='screen',
+            parameters=[{
+                'source_topic': '/livox/lidar',
+                'output_topic': '/livox/lidar_world',
+                'source_frame': 'livox_link',
+                'target_frame': 'world',
+                'lookup_timeout': 0.1,
+                'use_latest_on_extrapolation': False,
+                'cloud_timeout': 1.0,
+                'log_interval': 2.0,
+                'filter_enable': False,
+                'voxel_leaf_size': 0.1,
+                'min_range': 0.1,
+                'max_range': 50.0,
+                'min_z': -20.0,
+                'max_z': 20.0,
+                'max_points': 80000,
+            }],
+        ),
+        Node(
+            package='diff_planner',
+            executable='diff_planner_node',
+            name='drone_0_diff_planner_node',
+            output='screen',
+            parameters=[planner_params(map_size_x, map_size_y, map_size_z)],
+            remappings=[
+                ('odom_world', odom_topic),
+                ('mandatory_stop', '/mandatory_stop_to_planner'),
+                ('planning/trajectory', '/drone_0_planning/trajectory'),
+                ('planning/data_display', '/drone_0_planning/data_display'),
+                ('planning/broadcast_traj_send', '/broadcast_traj_from_planner'),
+                ('planning/broadcast_traj_recv', '/broadcast_traj_to_planner'),
+                ('planning/heartbeat', '/drone_0_traj_server/heartbeat'),
+                ('grid_map/odom', odom_topic),
+                ('grid_map/cloud', '/livox/lidar_world'),
+            ],
+        ),
+        Node(
+            package='diff_planner',
+            executable='traj_server',
+            name='drone_0_traj_server',
+            output='screen',
+            parameters=[{'traj_server.time_forward': 1.0}],
+            remappings=[
+                ('position_cmd', cmd_topic),
+                ('planning/trajectory', '/drone_0_planning/trajectory'),
+                ('heartbeat', '/drone_0_traj_server/heartbeat'),
+            ],
+        ),
+        Node(
+            package='diff_planner',
+            executable='trajectory_msg_converter.py',
+            name='traj_msg_converter',
+            output='screen',
+            parameters=[{
+                'traj_topic': cmd_topic,
+                'traj_pub_topic': '/command/trajectory',
+            }],
+        ),
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz',
+            arguments=['-d', PathJoinSubstitution([pkg_share, 'launch', 'include', 'sim.rviz'])],
+            output='screen',
+        ),
+    ])

@@ -3,8 +3,6 @@
 
 #include <Eigen/Eigen>
 #include <vector>
-#include <ros/ros.h>
-
 #include <optimizer/poly_traj_utils.hpp>
 
 using std::vector;

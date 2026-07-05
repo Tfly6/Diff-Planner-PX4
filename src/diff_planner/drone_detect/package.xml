@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<package format="2">
+<package format="3">
   <name>drone_detect</name>
   <version>0.1.0</version>
   <description>Detect other drones in depth image.</description>
@@ -7,14 +7,19 @@
   <license>BSD</license>
   <author email="zjujiangchaozhu@gmail.com">Jiangchao Zhu</author>
 
-  <!-- buildtool_depend: dependencies of the build process -->
-  <buildtool_depend>catkin</buildtool_depend>
-  <!-- build_depend: dependencies only used in source files -->
-  <build_depend>boost</build_depend>
-  <!-- depend: build, export, and execution dependency -->
-  <depend>eigen</depend>
-  <depend>roscpp</depend>
-  <depend>sensor_msgs</depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>roslint</build_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>message_filters</depend>
+  <depend>Eigen3</depend>
+  <depend>libopencv-dev</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

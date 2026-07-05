@@ -1,4 +1,4 @@
-Header header
+std_msgs/Header header
 
 time start_time
 time final_time

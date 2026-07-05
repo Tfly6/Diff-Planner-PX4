@@ -4,18 +4,19 @@
 #include <Eigen/Eigen>
 #include <Eigen/StdVector>
 #include <cv_bridge/cv_bridge.h>
-#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <iostream>
 #include <random>
-#include <nav_msgs/Odometry.h>
+#include <nav_msgs/msg/odometry.hpp>
 #include <queue>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
+#include <rmw/qos_profiles.h>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/image_encodings.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <tuple>
-#include <visualization_msgs/Marker.h>
-
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
+#include <visualization_msgs/msg/marker.hpp>
 
 #include <message_filters/subscriber.h>
 #include <message_filters/sync_policies/approximate_time.h>
@@ -43,6 +44,7 @@ struct MappingParameters
   double obstacles_inflation_;
   int inf_grid_;
   string frame_id_;
+  string extrinsic_topic_;
   int pose_type_;
   bool enable_virtual_wall_;
   double virtual_ceil_, virtual_ground_;
@@ -55,7 +57,7 @@ struct MappingParameters
 
   /* depth image projection filtering */
   bool use_depth_filter_;
-  double depth_filter_mindist_, depth_filter_tolerance_;
+  double depth_filter_maxdist_, depth_filter_mindist_, depth_filter_tolerance_;
   int depth_filter_margin_;
   double k_depth_scaling_factor_;
   int skip_pixel_;
@@ -63,7 +65,7 @@ struct MappingParameters
   /* raycasting */
   double p_hit_, p_miss_, p_min_, p_max_, p_occ_;                                           // occupancy probability
   double prob_hit_log_, prob_miss_log_, clamp_min_log_, clamp_max_log_, min_occupancy_log_; // logit of occupancy probability
-  double min_ray_length_;                                                                   // range of doing raycasting
+  double min_ray_length_, max_ray_length_;                                                  // range of doing raycasting
   double fading_time_;
 
   /* visualization and computation time display */
@@ -114,7 +116,7 @@ struct MappingData
   bool has_odom_;
 
   // odom_depth_timeout_
-  ros::Time last_occ_update_time_;
+  rclcpp::Time last_occ_update_time_;
   bool flag_depth_odom_timeout_;
   bool flag_have_ever_received_depth_;
 
@@ -141,7 +143,7 @@ public:
   GridMap() {}
   ~GridMap() {}
 
-  void initMap(ros::NodeHandle &nh);
+  void initMap(const rclcpp::Node::SharedPtr &node);
   inline int getOccupancy(Eigen::Vector3d pos);
   inline int getInflateOccupancy(Eigen::Vector3d pos);
   inline double getResolution();
@@ -177,17 +179,18 @@ private:
   void publishMapInflate();
 
   // get depth image and camera pose
-  void depthPoseCallback(const sensor_msgs::ImageConstPtr &img,
-                         const geometry_msgs::PoseStampedConstPtr &pose);
-  void extrinsicCallback(const nav_msgs::OdometryConstPtr &odom);
-  void depthOdomCallback(const sensor_msgs::ImageConstPtr &img, const nav_msgs::OdometryConstPtr &odom);
-  void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &img);
-  void odomCallback(const nav_msgs::OdometryConstPtr &odom);
+  void depthPoseCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img,
+                         const geometry_msgs::msg::PoseStamped::ConstSharedPtr &pose);
+  void extrinsicCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
+  void depthOdomCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img,
+                         const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
+  void cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &img);
+  void odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom);
 
   // update occupancy by raycasting
-  void updateOccupancyCallback(const ros::TimerEvent & /*event*/);
-  void visCallback(const ros::TimerEvent & /*event*/);
-  void fadingCallback(const ros::TimerEvent & /*event*/);
+  void updateOccupancyCallback();
+  void visCallback();
+  void fadingCallback();
 
   void clearBuffer(char casein, int bound);
 
@@ -209,23 +212,26 @@ private:
   // nav_msgs::Odometry> SyncPolicyImageOdom; typedef
   // message_filters::sync_policies::ExactTime<sensor_msgs::Image,
   // geometry_msgs::PoseStamped> SyncPolicyImagePose;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, nav_msgs::Odometry>
+  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, nav_msgs::msg::Odometry>
       SyncPolicyImageOdom;
-  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, geometry_msgs::PoseStamped>
+  typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, geometry_msgs::msg::PoseStamped>
       SyncPolicyImagePose;
   typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImagePose>> SynchronizerImagePose;
   typedef shared_ptr<message_filters::Synchronizer<SyncPolicyImageOdom>> SynchronizerImageOdom;
 
-  ros::NodeHandle node_;
-  shared_ptr<message_filters::Subscriber<sensor_msgs::Image>> depth_sub_;
-  shared_ptr<message_filters::Subscriber<geometry_msgs::PoseStamped>> pose_sub_;
-  shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> odom_sub_;
+  rclcpp::Node::SharedPtr node_;
+  shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> depth_sub_;
+  shared_ptr<message_filters::Subscriber<geometry_msgs::msg::PoseStamped>> pose_sub_;
+  shared_ptr<message_filters::Subscriber<nav_msgs::msg::Odometry>> odom_sub_;
   SynchronizerImagePose sync_image_pose_;
   SynchronizerImageOdom sync_image_odom_;
 
-  ros::Subscriber indep_cloud_sub_, indep_odom_sub_, extrinsic_sub_;
-  ros::Publisher map_pub_, map_inf_pub_;
-  ros::Timer occ_timer_, vis_timer_, fading_timer_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr indep_cloud_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr indep_odom_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr extrinsic_sub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr map_inf_pub_;
+  rclcpp::TimerBase::SharedPtr occ_timer_, vis_timer_, fading_timer_;
 
   //
   uniform_real_distribution<double> rand_noise_;
@@ -281,7 +287,7 @@ inline void GridMap::changeInfBuf(const bool dir, const int inf_buf_idx, const E
             --md_.occupancy_buffer_inflate_[id_inf_buf];
             if (md_.occupancy_buffer_inflate_[id_inf_buf] > 65000) // An error case
             {
-              ROS_ERROR("A negtive value of nearby obstacle number! reset the map.");
+              RCLCPP_ERROR(node_->get_logger(), "A negative value of nearby obstacle number! reset the map.");
               fill(md_.occupancy_buffer_.begin(), md_.occupancy_buffer_.end(), mp_.clamp_min_log_);
               fill(md_.occupancy_buffer_inflate_.begin(), md_.occupancy_buffer_inflate_.end(), 0L);
             }
@@ -295,7 +301,7 @@ inline void GridMap::changeInfBuf(const bool dir, const int inf_buf_idx, const E
         else
         {
           cout << "id_inf=" << id_inf.transpose() << " md_.ringbuffer_inf_upbound3i_=" << md_.ringbuffer_inf_upbound3i_.transpose() << " md_.ringbuffer_upbound3i_=" << md_.ringbuffer_upbound3i_.transpose() << endl;
-          ROS_ERROR("isInInfBuf return false 1");
+          RCLCPP_ERROR(node_->get_logger(), "isInInfBuf return false 1");
         }
 
 #else
@@ -307,7 +313,7 @@ inline void GridMap::changeInfBuf(const bool dir, const int inf_buf_idx, const E
           --md_.occupancy_buffer_inflate_[id_inf_buf];
           if (md_.occupancy_buffer_inflate_[id_inf_buf] > 65000) // An error case
           {
-            ROS_ERROR("A negtive value of nearby obstacle number! reset the map.");
+            RCLCPP_ERROR(node_->get_logger(), "A negative value of nearby obstacle number! reset the map.");
             fill(md_.occupancy_buffer_.begin(), md_.occupancy_buffer_.end(), mp_.clamp_min_log_);
             fill(md_.occupancy_buffer_inflate_.begin(), md_.occupancy_buffer_inflate_.end(), 0L);
           }

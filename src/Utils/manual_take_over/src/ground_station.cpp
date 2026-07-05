@@ -1,42 +1,49 @@
 #include <Eigen/Eigen>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
 #include <iostream>
-#include <sensor_msgs/Joy.h>
+#include <sensor_msgs/msg/joy.hpp>
 
 
 using namespace std;
-bool flag_mandatory_stoped_ = false;
 
-ros::Publisher joy_pub_;
-
-void joy_sub_cb(const sensor_msgs::Joy::ConstPtr &msg)
+class ManualTakeOverStation : public rclcpp::Node
 {
-
-  if ( msg->buttons[0] || msg->buttons[1] || msg->buttons[2] || msg->buttons[3] )
+public:
+  ManualTakeOverStation() : Node("manual_take_over_ground_station")
   {
-    flag_mandatory_stoped_ = true;
+    joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
+      "/joy", 10, std::bind(&ManualTakeOverStation::joy_sub_cb, this, std::placeholders::_1));
+    joy_pub_ = this->create_publisher<sensor_msgs::msg::Joy>("/joystick_from_users", 10);
   }
 
-  if ( flag_mandatory_stoped_ )
+private:
+  bool flag_mandatory_stoped_ = false;
+  rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr joy_pub_;
+  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
+
+  void joy_sub_cb(const sensor_msgs::msg::Joy::ConstSharedPtr &msg)
   {
-    joy_pub_.publish(*msg);
+    if (msg->buttons[0] || msg->buttons[1] || msg->buttons[2] || msg->buttons[3])
+    {
+      flag_mandatory_stoped_ = true;
+    }
+
+    if (flag_mandatory_stoped_)
+    {
+      joy_pub_->publish(*msg);
+    }
   }
-  
-}
+};
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "manual_take_over_ground_station");
-  ros::NodeHandle nh("~");
-
-  ros::Subscriber joy_sub = nh.subscribe<sensor_msgs::Joy>("/joy", 10, joy_sub_cb);
-  joy_pub_ = nh.advertise<sensor_msgs::Joy>("/joystick_from_users", 10);
-
-  ros::spin();
-
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<ManualTakeOverStation>();
+  rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }
