@@ -13,6 +13,8 @@
 
 >支持 Ubuntu 18.04 ROS Melodic、Ubuntu 20.04 ROS Noetic
 
+现更新了 ROS2 版本(实验中) [ros2](https://github.com/Tfly6/Diff-Planner-PX4/tree/ros2)
+
 ## 1. 准备
 
 - **使用之前必须搭建** [PX4无人机仿真环境](https://blog.csdn.net/weixin_55944949/article/details/130895608?spm=1001.2014.3001.5501)
