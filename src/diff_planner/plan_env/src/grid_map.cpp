@@ -1,5 +1,6 @@
 #include "plan_env/grid_map.h"
 #include <functional>
+#include <algorithm>
 
 namespace
 {
@@ -174,6 +175,12 @@ void GridMap::initMap(const rclcpp::Node::SharedPtr &node)
 
   md_.flag_have_ever_received_depth_ = false;
   md_.flag_depth_odom_timeout_ = false;
+
+  RCLCPP_INFO(node_->get_logger(),
+              "grid_map init: frame=%s pose_type=%d resolution=%.3f inflation=%.3f inf_grid=%d local_range=(%.2f, %.2f, %.2f) depth_filter=%s timeout=%.2f",
+              mp_.frame_id_.c_str(), mp_.pose_type_, mp_.resolution_, mp_.obstacles_inflation_, mp_.inf_grid_,
+              mp_.local_update_range3d_(0), mp_.local_update_range3d_(1), mp_.local_update_range3d_(2),
+              mp_.use_depth_filter_ ? "on" : "off", mp_.odom_depth_timeout_);
 }
 
 void GridMap::updateOccupancyCallback()
@@ -218,6 +225,19 @@ void GridMap::updateOccupancyCallback()
       printf("Raycast(ms): cur t = %lf, avg t = %lf, max t = %lf\n", (t4 - t3).seconds() * 1000, raycasttime / updatetimes * 1000, max_raycasttime * 1000);
       printf("Infaltion(ms): cur t = %lf, avg t = %lf, max t = %lf\n", (t5 - t4).seconds() * 1000, inflationtime / updatetimes * 1000, max_inflationtime * 1000);
     }
+
+    const int camera_occ = getInflateOccupancy(md_.camera_pos_);
+    RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                         "grid_map update: seq=%llu proj=%d camera=(%.2f, %.2f, %.2f) camera_occ=%d occupied=%d inflated=%d",
+                         static_cast<unsigned long long>(md_.map_update_seq_), md_.proj_points_cnt_,
+                         md_.camera_pos_(0), md_.camera_pos_(1), md_.camera_pos_(2), camera_occ,
+                         md_.last_occupied_voxel_count_, md_.last_inflated_voxel_count_);
+  }
+  else
+  {
+    RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                         "grid_map update skipped raycast: projected point count is zero, sampled=%d depth=%dx%d",
+                         md_.last_sampled_pixel_count_, md_.last_depth_width_, md_.last_depth_height_);
   }
 
   md_.occ_need_update_ = false;
@@ -279,6 +299,8 @@ void GridMap::depthPoseCallback(const sensor_msgs::msg::Image::ConstSharedPtr &i
     (cv_ptr->image).convertTo(cv_ptr->image, CV_16UC1, mp_.k_depth_scaling_factor_);
   }
   cv_ptr->image.copyTo(md_.depth_image_);
+  md_.last_depth_width_ = md_.depth_image_.cols;
+  md_.last_depth_height_ = md_.depth_image_.rows;
 
   static bool first_flag = true;
   if (first_flag)
@@ -296,6 +318,11 @@ void GridMap::depthPoseCallback(const sensor_msgs::msg::Image::ConstSharedPtr &i
   md_.camera_r_m_ = Eigen::Quaterniond(pose->pose.orientation.w, pose->pose.orientation.x,
                                        pose->pose.orientation.y, pose->pose.orientation.z)
                         .toRotationMatrix();
+
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                       "grid_map depth+pose: depth=%dx%d camera=(%.2f, %.2f, %.2f) pose_type=PoseStamped",
+                       md_.last_depth_width_, md_.last_depth_height_,
+                       md_.camera_pos_(0), md_.camera_pos_(1), md_.camera_pos_(2));
 
   md_.occ_need_update_ = true;
   md_.flag_have_ever_received_depth_ = true;
@@ -332,6 +359,8 @@ void GridMap::depthOdomCallback(const sensor_msgs::msg::Image::ConstSharedPtr &i
     (cv_ptr->image).convertTo(cv_ptr->image, CV_16UC1, mp_.k_depth_scaling_factor_);
   }
   cv_ptr->image.copyTo(md_.depth_image_);
+  md_.last_depth_width_ = md_.depth_image_.cols;
+  md_.last_depth_height_ = md_.depth_image_.rows;
 
   static bool first_flag = true;
   if (first_flag)
@@ -339,6 +368,12 @@ void GridMap::depthOdomCallback(const sensor_msgs::msg::Image::ConstSharedPtr &i
     first_flag = false;
     md_.proj_points_.resize(md_.depth_image_.cols * md_.depth_image_.rows / mp_.skip_pixel_ / mp_.skip_pixel_);
   }
+
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                       "grid_map depth+odom: depth=%dx%d body=(%.2f, %.2f, %.2f) camera=(%.2f, %.2f, %.2f)",
+                       md_.last_depth_width_, md_.last_depth_height_,
+                       odom->pose.pose.position.x, odom->pose.pose.position.y, odom->pose.pose.position.z,
+                       md_.camera_pos_(0), md_.camera_pos_(1), md_.camera_pos_(2));
 
   md_.occ_need_update_ = true;
   md_.flag_have_ever_received_depth_ = true;
@@ -372,6 +407,11 @@ void GridMap::odomCallback(const nav_msgs::msg::Odometry::ConstSharedPtr &odom)
   md_.camera_r_m_ = cam_T.block<3, 3>(0, 0);
 
   md_.has_odom_ = true;
+
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                       "grid_map odom-only update: body=(%.2f, %.2f, %.2f) camera=(%.2f, %.2f, %.2f)",
+                       odom->pose.pose.position.x, odom->pose.pose.position.y, odom->pose.pose.position.z,
+                       md_.camera_pos_(0), md_.camera_pos_(1), md_.camera_pos_(2));
 }
 
 void GridMap::cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
@@ -404,6 +444,12 @@ void GridMap::cloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr 
   {
     md_.proj_points_[md_.proj_points_cnt_++] = pt;
   }
+  md_.last_cloud_point_count_ = static_cast<int>(latest_cloud.size());
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                       "grid_map cloud input: points=%d camera=(%.2f, %.2f, %.2f) has_odom=%s",
+                       md_.last_cloud_point_count_,
+                       md_.camera_pos_(0), md_.camera_pos_(1), md_.camera_pos_(2),
+                       md_.has_odom_ ? "true" : "false");
   moveRingBuffer();          
   raycastFromCloud();// TODO by glq        
   clearAndInflateLocalMap(); 
@@ -491,6 +537,7 @@ void GridMap::moveRingBuffer()
 void GridMap::projectDepthImage()
 {
   md_.proj_points_cnt_ = 0;
+  md_.last_sampled_pixel_count_ = 0;
 
   uint16_t *row_ptr;
   int cols = md_.depth_image_.cols;
@@ -513,6 +560,7 @@ void GridMap::projectDepthImage()
         Eigen::Vector3d proj_pt;
         depth = (*row_ptr) / mp_.k_depth_scaling_factor_;
         row_ptr = row_ptr + mp_.skip_pixel_;
+        ++md_.last_sampled_pixel_count_;
 
         if (depth < 0.1)
           continue;
@@ -552,6 +600,7 @@ void GridMap::projectDepthImage()
 
           depth = raw_depth * inv_factor;
           row_ptr = row_ptr + mp_.skip_pixel_;
+          ++md_.last_sampled_pixel_count_;
 
           // filter depth
           // depth += rand_noise_(eng_);
@@ -609,6 +658,12 @@ void GridMap::projectDepthImage()
   md_.last_camera_pos_ = md_.camera_pos_;
   md_.last_camera_r_m_ = md_.camera_r_m_;
   md_.last_depth_image_ = md_.depth_image_;
+
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                       "grid_map projection: sampled=%d projected=%d depth=%dx%d camera=(%.2f, %.2f, %.2f)",
+                       md_.last_sampled_pixel_count_, md_.proj_points_cnt_,
+                       md_.last_depth_width_, md_.last_depth_height_,
+                       md_.camera_pos_(0), md_.camera_pos_(1), md_.camera_pos_(2));
 }
 
 void GridMap::raycastFromCloud()
@@ -827,6 +882,13 @@ void GridMap::clearAndInflateLocalMap()
       changeInfBuf(false, inf_buf_id, idx);
     }
   }
+
+  md_.last_occupied_voxel_count_ = static_cast<int>(std::count_if(
+      md_.occupancy_buffer_.begin(), md_.occupancy_buffer_.end(),
+      [this](double value) { return value >= mp_.min_occupancy_log_; }));
+  md_.last_inflated_voxel_count_ = static_cast<int>(std::count_if(
+      md_.occupancy_buffer_inflate_.begin(), md_.occupancy_buffer_inflate_.end(),
+      [](uint16_t value) { return value != 0; }));
 }
 
 void GridMap::initMapBoundary()
@@ -954,6 +1016,11 @@ bool GridMap::checkDepthOdomNeedupdate()
   }
   if (!md_.occ_need_update_)
   {
+    if (!md_.flag_have_ever_received_depth_)
+    {
+      RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 3000,
+                           "grid_map waiting for first depth frame on grid_map/depth");
+    }
     if (md_.flag_have_ever_received_depth_ && (node_->now() - md_.last_occ_update_time_).seconds() > mp_.odom_depth_timeout_)
     {
       RCLCPP_ERROR(node_->get_logger(), "odom or depth lost! now=%f, last=%f, timeout=%f",
@@ -963,6 +1030,7 @@ bool GridMap::checkDepthOdomNeedupdate()
     return false;
   }
   md_.last_occ_update_time_ = node_->now();
+  md_.map_update_seq_++;
 
   return true;
 }
@@ -1018,6 +1086,10 @@ void GridMap::publishMapInflate()
         }
 
   map_inf_pub_->publish(make_cloud_msg(cloud, mp_.frame_id_, node_->now()));
+  RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                       "grid_map inflate vis: pub_points=%zu occupied_voxels=%d inflated_voxels=%d map_seq=%llu",
+                       cloud.size(), md_.last_occupied_voxel_count_, md_.last_inflated_voxel_count_,
+                       static_cast<unsigned long long>(md_.map_update_seq_));
 }
 
 void GridMap::testIndexingCost()

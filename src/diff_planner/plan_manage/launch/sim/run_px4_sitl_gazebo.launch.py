@@ -19,6 +19,16 @@ def resolved_topic(drone_id, topic, use_prefix):
     ])
 
 
+def planner_node_topic(drone_id, topic):
+    return PythonExpression([
+        "'/drone_' + str(",
+        drone_id,
+        ") + '_diff_planner_node/' + '",
+        topic,
+        "'.lstrip('/')",
+    ])
+
+
 def planner_params():
     return {
         'fsm.thresh_replan_time': 1.0,
@@ -152,7 +162,7 @@ def generate_launch_description():
         DeclareLaunchArgument('drone_id', default_value='0'),
         DeclareLaunchArgument('map_size_x', default_value='200.0'),
         DeclareLaunchArgument('map_size_y', default_value='200.0'),
-        DeclareLaunchArgument('map_size_z', default_value='3.0'),
+        DeclareLaunchArgument('map_size_z', default_value='5.0'),
         DeclareLaunchArgument('init_x', default_value='-15.0'),
         DeclareLaunchArgument('init_y', default_value='0.0'),
         DeclareLaunchArgument('init_z', default_value='1.0'),
@@ -225,20 +235,17 @@ def generate_launch_description():
             arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'],
         ),
         Node(
-            package='ros_gz_bridge',
-            executable='parameter_bridge',
+            package='diff_planner',
+            executable='gz_depth_bridge.py',
             name='depth_bridge',
             output='screen',
-            arguments=[
-                PythonExpression(["'", gz_depth_topic, "@sensor_msgs/msg/Image[gz.msgs.Image'"]),
-                PythonExpression(["'", gz_camera_info_topic, "@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo'"]),
-            ],
-            remappings=[
-                (gz_depth_topic, resolved_depth_topic),
-                (gz_camera_info_topic, '/camera/camera_info'),
-            ],
             parameters=[{
                 'use_sim_time': True,
+                'gz_depth_topic': gz_depth_topic,
+                'gz_camera_info_topic': gz_camera_info_topic,
+                'output_topic': resolved_depth_topic,
+                'camera_info_topic': '/camera/camera_info',
+                'output_frame_id': 'camera_link',
             }],
         ),
         Node(
@@ -268,6 +275,14 @@ def generate_launch_description():
                 ('planning/broadcast_traj_send', '/broadcast_traj_from_planner'),
                 ('planning/broadcast_traj_recv', '/broadcast_traj_to_planner'),
                 ('planning/heartbeat', PythonExpression(["'/drone_' + str(", drone_id, ") + '_traj_server/heartbeat'"])),
+                ('goal_point', planner_node_topic(drone_id, 'goal_point')),
+                ('global_list', planner_node_topic(drone_id, 'global_list')),
+                ('init_list', planner_node_topic(drone_id, 'init_list')),
+                ('optimal_list', planner_node_topic(drone_id, 'optimal_list')),
+                ('failed_list', planner_node_topic(drone_id, 'failed_list')),
+                ('a_star_list', planner_node_topic(drone_id, 'a_star_list')),
+                ('grid_map/occupancy', planner_node_topic(drone_id, 'grid_map/occupancy')),
+                ('grid_map/occupancy_inflate', planner_node_topic(drone_id, 'grid_map/occupancy_inflate')),
                 ('grid_map/odom', resolved_odom_topic),
                 ('grid_map/cloud', resolved_cloud_topic),
                 ('grid_map/pose', resolved_camera_pose_topic),

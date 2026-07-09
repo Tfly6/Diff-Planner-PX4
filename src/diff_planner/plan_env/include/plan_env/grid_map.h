@@ -119,6 +119,13 @@ struct MappingData
   rclcpp::Time last_occ_update_time_;
   bool flag_depth_odom_timeout_;
   bool flag_have_ever_received_depth_;
+  int last_depth_width_ = 0;
+  int last_depth_height_ = 0;
+  int last_sampled_pixel_count_ = 0;
+  int last_cloud_point_count_ = 0;
+  int last_occupied_voxel_count_ = 0;
+  int last_inflated_voxel_count_ = 0;
+  uint64_t map_update_seq_ = 0;
 
   // depth image projected point cloud
 
@@ -148,6 +155,18 @@ public:
   inline int getInflateOccupancy(Eigen::Vector3d pos);
   inline double getResolution();
   bool getOdomDepthTimeout() { return md_.flag_depth_odom_timeout_; }
+  bool hasEverReceivedDepth() const { return md_.flag_have_ever_received_depth_; }
+  bool hasOdom() const { return md_.has_odom_; }
+  bool hasMapInitialized() const { return mp_.have_initialized_; }
+  Eigen::Vector3d getDebugCameraPos() const { return md_.camera_pos_; }
+  int getDebugProjectedPointCount() const { return md_.proj_points_cnt_; }
+  int getDebugLastDepthWidth() const { return md_.last_depth_width_; }
+  int getDebugLastDepthHeight() const { return md_.last_depth_height_; }
+  int getDebugLastSampledPixelCount() const { return md_.last_sampled_pixel_count_; }
+  int getDebugLastCloudPointCount() const { return md_.last_cloud_point_count_; }
+  int getDebugLastOccupiedVoxelCount() const { return md_.last_occupied_voxel_count_; }
+  int getDebugLastInflatedVoxelCount() const { return md_.last_inflated_voxel_count_; }
+  uint64_t getDebugMapUpdateSeq() const { return md_.map_update_seq_; }
 
   typedef std::shared_ptr<GridMap> Ptr;
 

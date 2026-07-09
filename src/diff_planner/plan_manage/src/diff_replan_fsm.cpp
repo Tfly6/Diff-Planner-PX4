@@ -440,6 +440,7 @@ namespace diff_planner
     LocalTrajData *info = &planner_manager_->traj_.local_traj;
     auto map = planner_manager_->grid_map_;
     const double t_cur = node_->now().seconds() - info->start_time;
+    const double t_eval = std::clamp(t_cur, 0.0, info->duration);
     PtsChk_t pts_chk = info->pts_chk;
 
     if (exec_state_ == WAIT_TARGET || exec_state_ ==  EMERGENCY_STOP || info->traj_id <= 0)
@@ -451,6 +452,24 @@ namespace diff_planner
       ROS_ERROR("Depth Lost! EMERGENCY_STOP");
       enable_fail_safe_ = false;
       changeFSMExecState(EMERGENCY_STOP, "SAFETY");
+    }
+
+    const Eigen::Vector3d nominal_pos = info->traj.getPos(t_eval);
+    const Eigen::Vector3d nominal_vel = info->traj.getVel(t_eval);
+    const double pos_err = (odom_pos_ - nominal_pos).norm();
+    const double vel_err = (odom_vel_ - nominal_vel).norm();
+    if (pos_err > 0.8 || vel_err > 1.0)
+    {
+      RCLCPP_WARN_THROTTLE(FSM_LOGGER, *node_->get_clock(), 500,
+                           "Tracking mismatch: odom=(%.2f, %.2f, %.2f) nominal=(%.2f, %.2f, %.2f) pos_err=%.2f "
+                           "odom_vel=(%.2f, %.2f, %.2f) nominal_vel=(%.2f, %.2f, %.2f) vel_err=%.2f "
+                           "odom_occ=%d nominal_occ=%d map_seq=%llu",
+                           odom_pos_(0), odom_pos_(1), odom_pos_(2),
+                           nominal_pos(0), nominal_pos(1), nominal_pos(2), pos_err,
+                           odom_vel_(0), odom_vel_(1), odom_vel_(2),
+                           nominal_vel(0), nominal_vel(1), nominal_vel(2), vel_err,
+                           map->getInflateOccupancy(odom_pos_), map->getInflateOccupancy(nominal_pos),
+                           static_cast<unsigned long long>(map->getDebugMapUpdateSeq()));
     }
 
     /* ---------- check trajectory ---------- */
@@ -513,6 +532,10 @@ namespace diff_planner
 
         if (dangerous)
         {
+          ROS_WARN("Trajectory collision detected: t=%.2f dt=%.2f point=(%.2f, %.2f, %.2f) map_occ=%d map_seq=%llu occ=%d inf_occ=%d",
+                   t, t - t_cur, p(0), p(1), p(2), map->getInflateOccupancy(p),
+                   static_cast<unsigned long long>(map->getDebugMapUpdateSeq()),
+                   map->getDebugLastOccupiedVoxelCount(), map->getDebugLastInflatedVoxelCount());
           /* Handle the collided case immediately */
           if (planFromLocalTraj()) // Make a chance
           {
@@ -571,6 +594,22 @@ namespace diff_planner
         local_target_pt_, local_target_vel_,
         touch_goal_);
 
+    const auto map = planner_manager_->grid_map_;
+    const int start_occ = map->getInflateOccupancy(start_pt_);
+    const int local_target_occ = map->getInflateOccupancy(local_target_pt_);
+    const int final_goal_occ = map->getInflateOccupancy(final_goal_);
+    const Eigen::Vector3d camera_pos = map->getDebugCameraPos();
+    ROS_INFO("Replan request: start=(%.2f, %.2f, %.2f) start_occ=%d local_target=(%.2f, %.2f, %.2f) local_target_occ=%d final_goal=(%.2f, %.2f, %.2f) final_goal_occ=%d touch_goal=%s map_seq=%llu proj=%d occ=%d inf_occ=%d camera=(%.2f, %.2f, %.2f)",
+             start_pt_(0), start_pt_(1), start_pt_(2), start_occ,
+             local_target_pt_(0), local_target_pt_(1), local_target_pt_(2), local_target_occ,
+             final_goal_(0), final_goal_(1), final_goal_(2), final_goal_occ,
+             touch_goal_ ? "true" : "false",
+             static_cast<unsigned long long>(map->getDebugMapUpdateSeq()),
+             map->getDebugProjectedPointCount(),
+             map->getDebugLastOccupiedVoxelCount(),
+             map->getDebugLastInflatedVoxelCount(),
+             camera_pos(0), camera_pos(1), camera_pos(2));
+
     bool plan_success = planner_manager_->reboundReplan(
         start_pt_, start_vel_, start_acc_,
         local_target_pt_, local_target_vel_,
@@ -592,6 +631,17 @@ namespace diff_planner
         ROS_INFO("Published first PolyTraj: traj_id=%d, pieces=%zu, start_time=%.3f",
                  poly_msg.traj_id, poly_msg.duration.size(), rclcpp::Time(poly_msg.start_time).seconds());
       }
+    }
+    else
+    {
+      ROS_WARN("Replan failed: start_occ=%d local_target_occ=%d final_goal_occ=%d map_seq=%llu depth_received=%s map_initialized=%s last_depth=%dx%d sampled=%d cloud_pts=%d occ=%d inf_occ=%d",
+               start_occ, local_target_occ, final_goal_occ,
+               static_cast<unsigned long long>(map->getDebugMapUpdateSeq()),
+               map->hasEverReceivedDepth() ? "true" : "false",
+               map->hasMapInitialized() ? "true" : "false",
+               map->getDebugLastDepthWidth(), map->getDebugLastDepthHeight(),
+               map->getDebugLastSampledPixelCount(), map->getDebugLastCloudPointCount(),
+               map->getDebugLastOccupiedVoxelCount(), map->getDebugLastInflatedVoxelCount());
     }
 
     return plan_success;
@@ -625,10 +675,30 @@ namespace diff_planner
 
     LocalTrajData *info = &planner_manager_->traj_.local_traj;
     double t_cur = node_->now().seconds() - info->start_time;
+    double t_eval = std::clamp(t_cur, 0.0, info->duration);
 
-    start_pt_ = info->traj.getPos(t_cur);
-    start_vel_ = info->traj.getVel(t_cur);
-    start_acc_ = info->traj.getAcc(t_cur);
+    const Eigen::Vector3d nominal_start_pt = info->traj.getPos(t_eval);
+    const Eigen::Vector3d nominal_start_vel = info->traj.getVel(t_eval);
+    const Eigen::Vector3d nominal_start_acc = info->traj.getAcc(t_eval);
+    const double start_pos_err = (odom_pos_ - nominal_start_pt).norm();
+    const double start_vel_err = (odom_vel_ - nominal_start_vel).norm();
+    if (start_pos_err > 0.8 || start_vel_err > 1.0)
+    {
+      ROS_WARN("Replan using nominal traj state while odom diverged: t=%.2f nominal_start=(%.2f, %.2f, %.2f) "
+               "odom=(%.2f, %.2f, %.2f) pos_err=%.2f nominal_vel=(%.2f, %.2f, %.2f) odom_vel=(%.2f, %.2f, %.2f) "
+               "vel_err=%.2f nominal_occ=%d odom_occ=%d",
+               t_eval,
+               nominal_start_pt(0), nominal_start_pt(1), nominal_start_pt(2),
+               odom_pos_(0), odom_pos_(1), odom_pos_(2), start_pos_err,
+               nominal_start_vel(0), nominal_start_vel(1), nominal_start_vel(2),
+               odom_vel_(0), odom_vel_(1), odom_vel_(2), start_vel_err,
+               planner_manager_->grid_map_->getInflateOccupancy(nominal_start_pt),
+               planner_manager_->grid_map_->getInflateOccupancy(odom_pos_));
+    }
+
+    start_pt_ = nominal_start_pt;
+    start_vel_ = nominal_start_vel;
+    start_acc_ = nominal_start_acc;
 
     bool success = callReboundReplan(false, false);
 
@@ -808,6 +878,11 @@ namespace diff_planner
     odom_vel_(2) = msg->twist.twist.linear.z;
 
     have_odom_ = true;
+
+    RCLCPP_INFO_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                         "FSM odom: pos=(%.2f, %.2f, %.2f) vel=(%.2f, %.2f, %.2f)",
+                         odom_pos_(0), odom_pos_(1), odom_pos_(2),
+                         odom_vel_(0), odom_vel_(1), odom_vel_(2));
   }
 
   void DiffReplanFSM::triggerCallback(const geometry_msgs::msg::PoseStamped::SharedPtr)

@@ -169,7 +169,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /global_list
+                Value: /drone_0_diff_planner_node/goal_point
               Value: true
             - Class: rviz_default_plugins/Marker
               Enabled: true
@@ -182,7 +182,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /goal_point
+                Value: /drone_0_diff_planner_node/global_list
               Value: true
             - Class: rviz_default_plugins/Marker
               Enabled: true
@@ -195,10 +195,10 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /optimal_list
+                Value: /drone_0_diff_planner_node/optimal_list
               Value: true
             - Class: rviz_default_plugins/Marker
-              Enabled: false
+              Enabled: true
               Name: FailedList
               Namespaces:
                 {}
@@ -208,10 +208,10 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: ""
-              Value: false
+                Value: /drone_0_diff_planner_node/failed_list
+              Value: true
             - Class: rviz_default_plugins/Marker
-              Enabled: false
+              Enabled: true
               Name: AStar
               Namespaces:
                 {}
@@ -221,10 +221,10 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: ""
-              Value: false
+                Value: /drone_0_diff_planner_node/a_star_list
+              Value: true
             - Class: rviz_default_plugins/Marker
-              Enabled: false
+              Enabled: true
               Name: InitTraj
               Namespaces:
                 {}
@@ -234,8 +234,8 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: ""
-              Value: false
+                Value: /drone_0_diff_planner_node/init_list
+              Value: true
             - Alpha: 1
               Buffer Length: 1
               Class: rviz_default_plugins/Path
@@ -468,7 +468,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_1_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_1_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -638,7 +638,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_2_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_2_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -808,7 +808,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_3_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_3_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -978,7 +978,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_4_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_4_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -1148,7 +1148,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_5_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_5_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -1318,7 +1318,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_6_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_6_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -1488,7 +1488,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_7_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_7_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -1658,7 +1658,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_8_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_8_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -1828,7 +1828,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_9_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_9_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -1998,7 +1998,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_10_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_10_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -2168,7 +2168,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_11_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_11_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -2338,7 +2338,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_12_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_12_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -2508,7 +2508,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_9_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_9_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -2678,7 +2678,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_14_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_14_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
@@ -2848,7 +2848,7 @@ Visualization Manager:
                 Filter size: 10
                 History Policy: Keep Last
                 Reliability Policy: Reliable
-                Value: /drone_15_ego_planner_node/grid_map/occupancy_inflate
+                Value: /drone_15_diff_planner_node/grid_map/occupancy_inflate
               Use Fixed Frame: true
               Use rainbow: true
               Value: true
