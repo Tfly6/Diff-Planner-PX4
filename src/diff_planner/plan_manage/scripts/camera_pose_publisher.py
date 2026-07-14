@@ -126,7 +126,8 @@ class CameraPosePublisher(Node):
 
     def odom_callback(self, msg: Odometry):
         self.latest_odom = msg
-        self.publish_from_odom(msg)
+        if not self.sync_depth_topic:
+            self.publish_from_odom(msg)
 
     def depth_callback(self, msg: Image):
         if self.latest_odom is None:

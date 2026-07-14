@@ -80,6 +80,7 @@ namespace diff_planner
     bool need_hover_stop_;
     bool mondify_final_goal_;
     bool enable_stuck_detect_; // Whether to enable stuck detection
+    bool debug_log_{false};
 
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_, touch_goal_, mandatory_stop_;
     FSM_EXEC_STATE exec_state_;

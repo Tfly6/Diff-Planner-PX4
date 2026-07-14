@@ -175,6 +175,7 @@ public:
 private:
   MappingParameters mp_;
   MappingData md_;
+  bool debug_log_{false};
 
   enum
   {

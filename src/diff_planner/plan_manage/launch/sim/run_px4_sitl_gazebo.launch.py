@@ -106,6 +106,7 @@ def generate_launch_description():
     flight_type = LaunchConfiguration('flight_type')
     point_num = LaunchConfiguration('point_num')
     use_drone_topic_prefix = LaunchConfiguration('use_drone_topic_prefix')
+    planner_debug = LaunchConfiguration('planner_debug')
     px4_vehicle_odom_topic = LaunchConfiguration('px4_vehicle_odom_topic')
     camera_extrinsic_topic = LaunchConfiguration('camera_extrinsic_topic')
     gz_depth_topic = LaunchConfiguration('gz_depth_topic')
@@ -126,6 +127,7 @@ def generate_launch_description():
         # Keep sensor bridge nodes on sim time, but let the planner use wall time.
         'use_sim_time': False,
         'fsm.flight_type': flight_type,
+        'fsm.debug_log': planner_debug,
         'fsm.planning_horizon': 7.5,
         'fsm.waypoint_num': point_num,
         'fsm.waypoint0_x': LaunchConfiguration('target0_x'),
@@ -147,6 +149,7 @@ def generate_launch_description():
         'grid_map.map_size_y': map_size_y,
         'grid_map.map_size_z': map_size_z,
         'grid_map.pose_type': pose_type,
+        'grid_map.debug_log': planner_debug,
         'grid_map.extrinsic_topic': camera_extrinsic_topic,
         'manager.max_vel': 1.5,
         'manager.max_acc': 6.0,
@@ -189,6 +192,7 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_topic', default_value='/camera/depth/image_raw'),
         DeclareLaunchArgument('cloud_topic', default_value='pcl_render_node/cloud'),
         DeclareLaunchArgument('use_drone_topic_prefix', default_value='false'),
+        DeclareLaunchArgument('planner_debug', default_value='true'),
         DeclareLaunchArgument(
             'cmd_topic',
             default_value=PythonExpression(["'/drone_' + str(", drone_id, ") + '_planning/pos_cmd'"]),
