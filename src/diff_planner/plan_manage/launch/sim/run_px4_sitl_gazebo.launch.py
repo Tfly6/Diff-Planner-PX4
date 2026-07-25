@@ -37,6 +37,10 @@ def planner_params():
         'fsm.fail_safe': True,
         'fsm.mondify_final_goal': True,
         'fsm.enable_stuck_detect': True,
+        # Safeguards for stage-two moving target goals.
+        'fsm.goal_min_distance': 0.50,
+        'fsm.replan_use_odom_pos_error': 0.80,
+        'fsm.replan_use_odom_vel_error': 1.00,
         'grid_map.resolution': 0.1,
         'grid_map.local_update_range_x': 5.5,
         'grid_map.local_update_range_y': 5.5,

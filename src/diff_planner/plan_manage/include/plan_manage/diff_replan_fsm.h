@@ -69,6 +69,9 @@ namespace diff_planner
     /* parameters */
     int target_type_; // 1 mannual select, 2 hard code
     double no_replan_thresh_, replan_thresh_;
+    double goal_min_distance_;
+    double replan_use_odom_pos_error_;
+    double replan_use_odom_vel_error_;
     double waypoints_[50][3];
     int waypoint_num_, wpt_id_;
     double planning_horizen_;

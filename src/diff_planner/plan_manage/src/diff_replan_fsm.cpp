@@ -42,6 +42,12 @@ namespace diff_planner
     declare_and_get(node_, "fsm.mondify_final_goal", mondify_final_goal_, true);
     declare_and_get(node_, "fsm.enable_stuck_detect", enable_stuck_detect_, true);
     declare_and_get(node_, "fsm.debug_log", debug_log_, false);
+    // Dynamic tracking sends new goals while a local trajectory is active.
+    // Do not allow a zero-length global trajectory and reset from measured
+    // state when the vehicle has visibly fallen behind the nominal trajectory.
+    declare_and_get(node_, "fsm.goal_min_distance", goal_min_distance_, 0.50);
+    declare_and_get(node_, "fsm.replan_use_odom_pos_error", replan_use_odom_pos_error_, 0.80);
+    declare_and_get(node_, "fsm.replan_use_odom_vel_error", replan_use_odom_vel_error_, 1.00);
 
     declare_and_get(node_, "fsm.waypoint_num", waypoint_num_, -1);
     for (int i = 0; i < waypoint_num_; i++)
@@ -705,9 +711,11 @@ namespace diff_planner
     const Eigen::Vector3d nominal_start_acc = info->traj.getAcc(t_eval);
     const double start_pos_err = (odom_pos_ - nominal_start_pt).norm();
     const double start_vel_err = (odom_vel_ - nominal_start_vel).norm();
-    if (debug_log_ && (start_pos_err > 0.8 || start_vel_err > 1.0))
+    const bool use_odom_start =
+        start_pos_err > replan_use_odom_pos_error_ || start_vel_err > replan_use_odom_vel_error_;
+    if (debug_log_ && use_odom_start)
     {
-      ROS_WARN("Replan using nominal traj state while odom diverged: t=%.2f nominal_start=(%.2f, %.2f, %.2f) "
+      ROS_WARN("Replan resetting from odom after nominal divergence: t=%.2f nominal_start=(%.2f, %.2f, %.2f) "
                "odom=(%.2f, %.2f, %.2f) pos_err=%.2f nominal_vel=(%.2f, %.2f, %.2f) odom_vel=(%.2f, %.2f, %.2f) "
                "vel_err=%.2f nominal_occ=%d odom_occ=%d",
                t_eval,
@@ -719,11 +727,22 @@ namespace diff_planner
                planner_manager_->grid_map_->getInflateOccupancy(odom_pos_));
     }
 
-    start_pt_ = nominal_start_pt;
-    start_vel_ = nominal_start_vel;
-    start_acc_ = nominal_start_acc;
+    if (use_odom_start)
+    {
+      start_pt_ = odom_pos_;
+      start_vel_ = odom_vel_;
+      // PX4 odometry does not provide a reliable acceleration estimate here.
+      start_acc_.setZero();
+    }
+    else
+    {
+      start_pt_ = nominal_start_pt;
+      start_vel_ = nominal_start_vel;
+      start_acc_ = nominal_start_acc;
+    }
 
-    bool success = callReboundReplan(false, false);
+    // A measured-state restart cannot reuse the previous local polynomial.
+    bool success = callReboundReplan(use_odom_start, false);
 
     if (!success)
     {
@@ -746,8 +765,15 @@ namespace diff_planner
     return true;
   }
 
-    bool DiffReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp, bool flag_2replan)
+  bool DiffReplanFSM::planNextWaypoint(const Eigen::Vector3d next_wp, bool flag_2replan)
   {
+    const double goal_distance = (next_wp - odom_pos_).norm();
+    if (goal_distance < goal_min_distance_)
+    {
+      ROS_WARN("Ignoring goal %.3fm from current odom (minimum %.3fm): (%.2f, %.2f, %.2f)",
+               goal_distance, goal_min_distance_, next_wp(0), next_wp(1), next_wp(2));
+      return false;
+    }
     bool success = false;
     std::vector<Eigen::Vector3d> one_pt_wps;
     one_pt_wps.push_back(next_wp);
@@ -760,7 +786,7 @@ namespace diff_planner
       final_goal_ = next_wp;
       /*** display ***/
       constexpr double step_size_t = 0.1;
-      int i_end = floor(planner_manager_->traj_.global_traj.duration / step_size_t);
+      int i_end = std::max(1, static_cast<int>(floor(planner_manager_->traj_.global_traj.duration / step_size_t)));
       vector<Eigen::Vector3d> gloabl_traj(i_end);
       for (int i = 0; i < i_end; i++)
       {
@@ -771,18 +797,11 @@ namespace diff_planner
       /*** FSM ***/
       if (exec_state_ != WAIT_TARGET && flag_2replan && exec_state_ != EMERGENCY_STOP)
       {
-        auto start_time = node_->now();
-        rclcpp::Duration timeout = rclcpp::Duration::from_seconds(0.5);
-        while (exec_state_ != EXEC_TRAJ)
-        {
-          rclcpp::sleep_for(std::chrono::milliseconds(1));
-          if (node_->now() - start_time > timeout)
-          {
-            ROS_WARN("Timeout waiting for state to change to EXEC_TRAJ.");
-            return false; 
-          }
-        }
-        changeFSMExecState(REPLAN_TRAJ, "TRIG");
+        // planGlobalTrajWaypoints resets local_traj. This callback runs in the
+        // node's single-threaded executor, so the former wait-for-EXEC_TRAJ
+        // loop could neither make progress nor protect readers of local_traj.
+        // Schedule a fresh odom-based local trajectory on the next FSM tick.
+        changeFSMExecState(GEN_NEW_TRAJ, "NEW_TARGET");
       }
       else if(exec_state_ == EMERGENCY_STOP)
       {
