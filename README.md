@@ -76,10 +76,15 @@ git clone https://github.com/PX4/px4_msgs.git
 ---
 
 ## 2. 编译
-
+**下载源码：** 
+```bash
+cd ~/ros2_ws/src
+git clone https://github.com/Tfly6/Diff-Planner-PX4.git
+git checkout ros2
+```
+**编译：** 
 ```bash
 cd ~/ros2_ws
-source /opt/ros/humble/setup.bash
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
